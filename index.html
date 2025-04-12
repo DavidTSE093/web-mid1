@@ -1,101 +1,130 @@
-<script>
-  // 顯示當下時間
-  function updateTime() {
-    const now = new Date();
-    const formatted = now.getFullYear() + '/' +
-                      String(now.getMonth() + 1).padStart(2, '0') + '/' +
-                      String(now.getDate()).padStart(2, '0') + ' ' +
-                      String(now.getHours()).padStart(2, '0') + ':' +
-                      String(now.getMinutes()).padStart(2, '0') + ':' +
-                      String(now.getSeconds()).padStart(2, '0');
-    document.getElementById('currentTime').innerText = '現在時間：' + formatted;
-  }
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>溫濕度趨勢圖</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f0f0f0;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 5px;
+    }
+    #currentTime {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+    canvas {
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>溫度與濕度變化趨勢圖</h1>
+  <div id="currentTime">現在時間：--:--:--</div>
+  <canvas id="lineChart"></canvas>
 
-  setInterval(updateTime, 1000);
-  updateTime();
+  <script>
+    // 顯示當下時間
+    function updateTime() {
+      const now = new Date();
+      const formatted = now.getFullYear() + '/' +
+                        String(now.getMonth() + 1).padStart(2, '0') + '/' +
+                        String(now.getDate()).padStart(2, '0') + ' ' +
+                        String(now.getHours()).padStart(2, '0') + ':' +
+                        String(now.getMinutes()).padStart(2, '0') + ':' +
+                        String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('currentTime').innerText = '現在時間：' + formatted;
+    }
 
-  // Google Sheet 資料讀取
-  const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
-  const sheetName = '表單回應 1'; // 工作表名稱
-  const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+    setInterval(updateTime, 1000);
+    updateTime();
 
-  // 加入 CORS Proxy
-  const corsProxy = 'https://cors-anywhere.herokuapp.com/';
-  const fetchUrl = corsProxy + url;
+    // Google Sheet 資料讀取
+    const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
+    const sheetName = '表單回應 1'; // 工作表名稱
+    const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
-  fetch(fetchUrl)
-    .then(res => res.text())
-    .then(text => {
-      // 解析 Google Sheets 的 JSON 資料
-      const json = JSON.parse(text.substring(47).slice(0, -2));
-      const rows = json.table.rows;
+    fetch(url)
+      .then(res => res.text())
+      .then(text => {
+        // 解析 Google Sheets 的 JSON 資料
+        const json = JSON.parse(text.substring(47).slice(0, -2));
+        const rows = json.table.rows;
 
-      // 準備儲存溫度和濕度資料
-      const labels = [];
-      const temperatures = [];
-      const humidities = [];
+        // 準備儲存溫度和濕度資料
+        const labels = [];
+        const temperatures = [];
+        const humidities = [];
 
-      // 讀取每一列資料
-      rows.forEach((row, index) => {
-        const time = row.c[0]?.v;
-        const temp = row.c[1]?.v;
-        const hum = row.c[2]?.v;
+        // 讀取每一列資料
+        rows.forEach((row, index) => {
+          const time = row.c[0]?.v;
+          const temp = row.c[1]?.v;
+          const hum = row.c[2]?.v;
 
-        if (time && temp && hum) {
-          labels.push(time);
-          temperatures.push(temp);
-          humidities.push(hum);
-        }
-      });
+          if (time && temp && hum) {
+            labels.push(time);
+            temperatures.push(temp);
+            humidities.push(hum);
+          }
+        });
 
-      // 畫出折線圖
-      const ctx = document.getElementById('lineChart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: '溫度 (°C)',
-              data: temperatures,
-              borderColor: 'rgb(255, 99, 132)',
-              fill: false,
-              tension: 0.1
-            },
-            {
-              label: '濕度 (%)',
-              data: humidities,
-              borderColor: 'rgb(54, 162, 235)',
-              fill: false,
-              tension: 0.1
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              position: 'top',
-            },
-            title: {
-              display: true,
-              text: '即時溫濕度趨勢圖'
-            }
+        // 畫出折線圖
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: '溫度 (°C)',
+                data: temperatures,
+                borderColor: 'rgb(255, 99, 132)',
+                fill: false,
+                tension: 0.1
+              },
+              {
+                label: '濕度 (%)',
+                data: humidities,
+                borderColor: 'rgb(54, 162, 235)',
+                fill: false,
+                tension: 0.1
+              }
+            ]
           },
-          scales: {
-            x: {
-              ticks: {
-                maxRotation: 90,
-                minRotation: 45,
-                autoSkip: true,
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'top',
+              },
+              title: {
+                display: true,
+                text: '即時溫濕度趨勢圖'
+              }
+            },
+            scales: {
+              x: {
+                ticks: {
+                  maxRotation: 90,
+                  minRotation: 45,
+                  autoSkip: true,
+                }
               }
             }
           }
-        }
+        });
+      })
+      .catch(error => {
+        console.error('資料讀取錯誤:', error);
+        document.getElementById('currentTime').innerText = '資料載入失敗！';
       });
-    })
-    .catch(error => {
-      console.error('資料讀取錯誤:', error);
-      document.getElementById('currentTime').innerText = '資料載入失敗！';
-    });
-</script>
+  </script>
+</body>
+</html>
