@@ -2,28 +2,53 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>溫溼度趨勢圖</title>
+  <title>溫濕度趨勢圖</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
-      font-family: 'Arial', sans-serif;
+      font-family: Arial, sans-serif;
       padding: 20px;
-      background: #f9f9f9;
+      background-color: #f0f0f0;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 5px;
+    }
+    #currentTime {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 20px;
     }
     canvas {
       max-width: 100%;
-      height: auto;
     }
   </style>
 </head>
 <body>
-  <h1>溫度與濕度變化趨勢</h1>
+  <h1>溫度與濕度變化趨勢圖</h1>
+  <div id="currentTime">現在時間：--:--:--</div>
   <canvas id="lineChart"></canvas>
 
   <script>
+    // 顯示當下時間
+    function updateTime() {
+      const now = new Date();
+      const formatted = now.getFullYear() + '/' +
+                        String(now.getMonth() + 1).padStart(2, '0') + '/' +
+                        String(now.getDate()).padStart(2, '0') + ' ' +
+                        String(now.getHours()).padStart(2, '0') + ':' +
+                        String(now.getMinutes()).padStart(2, '0') + ':' +
+                        String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('currentTime').innerText = '現在時間：' + formatted;
+    }
+
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // Google Sheet 資料讀取
     const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
-    const sheetName = '未命名的試算表'; // 根據你的實際工作表名稱修改
-    const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${sheetName}`;
+    const sheetName = '表單回應 1';
+    const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
     fetch(url)
       .then(res => res.text())
@@ -35,7 +60,7 @@
         const temperatures = [];
         const humidities = [];
 
-        rows.forEach(row => {
+        rows.forEach((row, index) => {
           const time = row.c[0]?.v;
           const temp = row.c[1]?.v;
           const hum = row.c[2]?.v;
@@ -77,7 +102,16 @@
               },
               title: {
                 display: true,
-                text: '溫度與濕度變化'
+                text: '即時溫濕度趨勢圖'
+              }
+            },
+            scales: {
+              x: {
+                ticks: {
+                  maxRotation: 90,
+                  minRotation: 45,
+                  autoSkip: true,
+                }
               }
             }
           }
