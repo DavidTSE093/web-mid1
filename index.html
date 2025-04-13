@@ -19,13 +19,13 @@
       color: #333;
       margin-bottom: 20px;
     }
-    canvas {
-      max-width: 100%;
-    }
     #rangeSelect {
       font-size: 16px;
       padding: 5px 10px;
       margin-bottom: 20px;
+    }
+    canvas {
+      max-width: 100%;
     }
   </style>
 </head>
@@ -35,7 +35,7 @@
 
   <select id="rangeSelect">
     <option value="1h">最近一小時</option>
-    <option value="day">本日</option>
+    <option value="day" selected>本日</option>
     <option value="week">本週</option>
   </select>
 
@@ -81,11 +81,23 @@
 
           if (!timeStr || !temp || !hum) return;
 
-          const time = new Date(timeStr);
+          // 時間字串轉為 Date 物件（支援 yyyy/MM/dd HH:mm:ss）
+          const timeParts = timeStr.split(' ');
+          const dateParts = timeParts[0].split('/');
+          const timeClock = timeParts[1].split(':');
+          const time = new Date(
+            Number(dateParts[0]),
+            Number(dateParts[1]) - 1,
+            Number(dateParts[2]),
+            Number(timeClock[0]),
+            Number(timeClock[1]),
+            Number(timeClock[2])
+          );
+
           let include = false;
 
           if (range === '1h') {
-            include = (now - time <= 60 * 60 * 1000); // 1 hour
+            include = (now - time <= 60 * 60 * 1000);
           } else if (range === 'day') {
             include = (time.toDateString() === now.toDateString());
           } else if (range === 'week') {
@@ -101,6 +113,10 @@
           }
         });
 
+        if (labels.length === 0) {
+          document.getElementById('currentTime').innerText = '目前所選時間範圍內無資料';
+        }
+
         drawChart(labels, temperatures, humidities);
       } catch (error) {
         console.error('資料讀取錯誤:', error);
@@ -110,8 +126,7 @@
 
     function drawChart(labels, temps, hums) {
       const ctx = document.getElementById('lineChart').getContext('2d');
-
-      if (chart) chart.destroy(); // 清除舊圖表
+      if (chart) chart.destroy();
 
       chart = new Chart(ctx, {
         type: 'line',
@@ -147,6 +162,10 @@
           },
           scales: {
             x: {
+              title: {
+                display: true,
+                text: '時間'
+              },
               ticks: {
                 maxRotation: 90,
                 minRotation: 45,
@@ -168,8 +187,7 @@
       fetchAndDraw(e.target.value);
     });
 
-    // 預設載入本日資料
-    fetchAndDraw('day');
+    fetchAndDraw('day'); // 預設載入本日資料
   </script>
 </body>
 </html>
