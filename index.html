@@ -37,18 +37,15 @@
   <h1>溫度與濕度變化趨勢圖</h1>
   <div id="currentTime">現在時間：--:--:--</div>
 
-  <!-- 時間篩選按鈕 -->
   <div class="range-buttons">
     <button onclick="updateChartByRange('1h')">最近一小時</button>
     <button onclick="updateChartByRange('1d')">今日</button>
     <button onclick="updateChartByRange('1w')">本週</button>
   </div>
 
-  <!-- 折線圖 -->
   <canvas id="lineChart"></canvas>
 
   <script>
-    // 顯示當下時間
     function updateTime() {
       const now = new Date();
       const formatted = now.getFullYear() + '/' +
@@ -62,13 +59,11 @@
     setInterval(updateTime, 1000);
     updateTime();
 
-    // 變數儲存原始資料
     let allLabels = [];
     let allTemperatures = [];
     let allHumidities = [];
     let chart = null;
 
-    // 讀取 Google Sheet 資料
     const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
     const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
@@ -80,19 +75,21 @@
         const rows = json.table.rows;
 
         rows.forEach(row => {
-          const timeStr = row.c[0]?.v;
+          const timeStr = row.c[0]?.v; // 2024/4/13 下午 2:39:00
           const temp = row.c[1]?.v;
           const hum = row.c[2]?.v;
 
           if (timeStr && temp && hum) {
-            const time = new Date(timeStr);
-            allLabels.push(time);
-            allTemperatures.push(temp);
-            allHumidities.push(hum);
+            const timeParsed = parseTime(timeStr);
+            if (!isNaN(timeParsed)) {
+              allLabels.push(timeParsed);
+              allTemperatures.push(temp);
+              allHumidities.push(hum);
+            }
           }
         });
 
-        // 預設顯示本週資料
+        console.log('已讀取資料筆數：', allLabels.length);
         updateChartByRange('1w');
       })
       .catch(error => {
@@ -100,7 +97,12 @@
         document.getElementById('currentTime').innerText = '資料載入失敗！';
       });
 
-    // 更新圖表依時間範圍
+    function parseTime(str) {
+      // 支援 "2024/4/13 下午 2:39:00"
+      const replaced = str.replace('上午', 'AM').replace('下午', 'PM');
+      return new Date(replaced);
+    }
+
     function updateChartByRange(range) {
       const now = new Date();
       let cutoff;
@@ -111,32 +113,28 @@
         cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       } else if (range === '1w') {
         const day = now.getDay();
-        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // 計算週一
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // 星期一為開始
         cutoff = new Date(now.getFullYear(), now.getMonth(), diff);
       }
 
       const labels = [];
-      const temperatures = [];
-      const humidities = [];
+      const temps = [];
+      const hums = [];
 
       for (let i = 0; i < allLabels.length; i++) {
         if (allLabels[i] >= cutoff) {
           labels.push(formatTime(allLabels[i]));
-          temperatures.push(allTemperatures[i]);
-          humidities.push(allHumidities[i]);
+          temps.push(allTemperatures[i]);
+          hums.push(allHumidities[i]);
         }
       }
 
-      drawChart(labels, temperatures, humidities);
+      drawChart(labels, temps, hums);
     }
 
-    // 繪製圖表
-    function drawChart(labels, temperatures, humidities) {
+    function drawChart(labels, temps, hums) {
       const ctx = document.getElementById('lineChart').getContext('2d');
-
-      if (chart) {
-        chart.destroy();
-      }
+      if (chart) chart.destroy();
 
       chart = new Chart(ctx, {
         type: 'line',
@@ -145,14 +143,14 @@
           datasets: [
             {
               label: '溫度 (°C)',
-              data: temperatures,
+              data: temps,
               borderColor: 'rgb(255, 99, 132)',
               fill: false,
               tension: 0.1
             },
             {
               label: '濕度 (%)',
-              data: humidities,
+              data: hums,
               borderColor: 'rgb(54, 162, 235)',
               fill: false,
               tension: 0.1
@@ -181,18 +179,16 @@
       });
     }
 
-    // 時間格式化 (HH:mm 或 MM/DD HH:mm)
     function formatTime(date) {
       const now = new Date();
       const sameDay = date.toDateString() === now.toDateString();
-
       if (sameDay) {
-        return String(date.getHours()).padStart(2, '0') + ':' +
-               String(date.getMinutes()).padStart(2, '0');
+        return date.getHours().toString().padStart(2, '0') + ':' +
+               date.getMinutes().toString().padStart(2, '0');
       } else {
         return (date.getMonth() + 1) + '/' + date.getDate() + ' ' +
-               String(date.getHours()).padStart(2, '0') + ':' +
-               String(date.getMinutes()).padStart(2, '0');
+               date.getHours().toString().padStart(2, '0') + ':' +
+               date.getMinutes().toString().padStart(2, '0');
       }
     }
   </script>
