@@ -81,21 +81,13 @@
 
           if (!timeStr || !temp || !hum) return;
 
-          // 時間字串轉為 Date 物件（支援 yyyy/MM/dd HH:mm:ss）
-          const timeParts = timeStr.split(' ');
-          const dateParts = timeParts[0].split('/');
-          const timeClock = timeParts[1].split(':');
-          const time = new Date(
-            Number(dateParts[0]),
-            Number(dateParts[1]) - 1,
-            Number(dateParts[2]),
-            Number(timeClock[0]),
-            Number(timeClock[1]),
-            Number(timeClock[2])
-          );
+          // 解析 Google 表單時間格式 "2025/04/13 13:22:45"
+          const [datePart, timePart] = timeStr.split(' ');
+          const [year, month, day] = datePart.split('/').map(Number);
+          const [hour, minute, second] = timePart.split(':').map(Number);
+          const time = new Date(year, month - 1, day, hour, minute, second);
 
           let include = false;
-
           if (range === '1h') {
             include = (now - time <= 60 * 60 * 1000);
           } else if (range === 'day') {
@@ -120,7 +112,7 @@
         drawChart(labels, temperatures, humidities);
       } catch (error) {
         console.error('資料讀取錯誤:', error);
-        document.getElementById('currentTime').innerText = '資料載入失敗！';
+        document.getElementById('currentTime').innerText = '資料載入失敗，請檢查試算表分享權限';
       }
     }
 
@@ -187,7 +179,7 @@
       fetchAndDraw(e.target.value);
     });
 
-    fetchAndDraw('day'); // 預設載入本日資料
+    fetchAndDraw('day'); // 預設為本日資料
   </script>
 </body>
 </html>
