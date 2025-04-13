@@ -81,57 +81,62 @@
       return new Date(year, month, day, hour, minute, second);
     }
 
-    async function fetchDataAndDraw(range) {
-      try {
-        const res = await fetch(url);
-        const text = await res.text();
-        const json = JSON.parse(text.substring(47).slice(0, -2));
-        const rows = json.table.rows;
+async function fetchDataAndDraw(range) {
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(47).slice(0, -2));
+    const rows = json.table.rows;
 
-        const now = new Date();
-        const labels = [];
-        const temperatures = [];
-        const humidities = [];
+    const now = new Date();
+    const labels = [];
+    const temperatures = [];
+    const humidities = [];
 
-        rows.forEach(row => {
-          const timeStr = row.c[0]?.v;
-          const temp = row.c[1]?.v;
-          const hum = row.c[2]?.v;
+    rows.forEach(row => {
+      const timeStr = row.c[0]?.v;
+      const temp = row.c[1]?.v;
+      const hum = row.c[2]?.v;
 
-          if (!timeStr || !temp || !hum) return;
+      if (!timeStr || !temp || !hum) return;
 
-          const time = parseTaiwanDatetime(timeStr);
-          if (!time) return;
+      const time = parseTaiwanDatetime(timeStr);
+      if (!time) return;
 
-          let include = false;
-          if (range === '1h') {
-            include = now - time <= 60 * 60 * 1000;
-          } else if (range === 'day') {
-            include = now.toDateString() === time.toDateString();
-          } else if (range === 'week') {
-            const oneWeekAgo = new Date(now);
-            oneWeekAgo.setDate(now.getDate() - 7);
-            include = time >= oneWeekAgo;
-          }
+      // Debug: Log the time parsed and its range inclusion check
+      console.log(`Parsed time: ${time}, Current time: ${now}`);
 
-          if (include) {
-            const formattedTime = `${time.getFullYear()}/${time.getMonth() + 1}/${time.getDate()} ${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`;
-            labels.push(formattedTime);
-            temperatures.push(temp);
-            humidities.push(hum);
-          }
-        });
-
-        if (labels.length === 0) {
-          document.getElementById('currentTime').innerText = '目前所選時間範圍內無資料';
-        }
-
-        drawChart(labels, temperatures, humidities);
-      } catch (err) {
-        console.error('資料讀取錯誤:', err);
-        document.getElementById('currentTime').innerText = '資料載入失敗！請檢查權限與網址';
+      let include = false;
+      if (range === '1h') {
+        include = now - time <= 60 * 60 * 1000;
+      } else if (range === 'day') {
+        include = now.toDateString() === time.toDateString();
+      } else if (range === 'week') {
+        const oneWeekAgo = new Date(now);
+        oneWeekAgo.setDate(now.getDate() - 7);
+        include = time >= oneWeekAgo;
       }
+
+      console.log(`Include this time in range ${range}: ${include}`);
+
+      if (include) {
+        const formattedTime = `${time.getFullYear()}/${time.getMonth() + 1}/${time.getDate()} ${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`;
+        labels.push(formattedTime);
+        temperatures.push(temp);
+        humidities.push(hum);
+      }
+    });
+
+    if (labels.length === 0) {
+      document.getElementById('currentTime').innerText = '目前所選時間範圍內無資料';
     }
+
+    drawChart(labels, temperatures, humidities);
+  } catch (err) {
+    console.error('資料讀取錯誤:', err);
+    document.getElementById('currentTime').innerText = '資料載入失敗！請檢查權限與網址';
+  }
+}
 
     function drawChart(labels, temperatures, humidities) {
       const ctx = document.getElementById('lineChart').getContext('2d');
