@@ -22,11 +22,28 @@
     canvas {
       max-width: 100%;
     }
+    select {
+      padding: 5px;
+      font-size: 16px;
+    }
+    label {
+      margin-right: 10px;
+    }
   </style>
 </head>
 <body>
   <h1>溫度與濕度變化趨勢圖</h1>
   <div id="currentTime">現在時間：--:--:--</div>
+
+  <!-- 時間範圍選擇 -->
+  <div>
+    <label for="timeRangeSelect">選擇時間範圍:</label>
+    <select id="timeRangeSelect">
+      <option value="today">本日</option>
+      <option value="week">本週</option>
+      <option value="hour">最近一小時</option>
+    </select>
+  </div>
   
   <canvas id="lineChart"></canvas>
 
@@ -51,30 +68,74 @@
     const sheetName = '表單回應 1'; // 工作表名稱
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
+    // 根據選擇的時間範圍過濾資料
+    function filterDataByTimeRange(rows, range) {
+      const now = new Date();
+      const filteredLabels = [];
+      const filteredTemperatures = [];
+      const filteredHumidities = [];
+
+      rows.forEach(row => {
+        const timeStr = row.c[0]?.v;
+        const temp = row.c[1]?.v;
+        const hum = row.c[2]?.v;
+
+        if (timeStr && temp && hum) {
+          const time = new Date(timeStr);
+          let timeCondition = false;
+
+          switch (range) {
+            case 'today':
+              // 本日：時間為今天
+              if (time.toDateString() === now.toDateString()) {
+                timeCondition = true;
+              }
+              break;
+            case 'week':
+              // 本週：時間在本週內
+              const weekStart = new Date(now);
+              weekStart.setDate(now.getDate() - now.getDay()); // 本週的星期一
+              if (time >= weekStart && time <= now) {
+                timeCondition = true;
+              }
+              break;
+            case 'hour':
+              // 最近一小時：時間在當前時間的前一小時內
+              const hourStart = new Date(now);
+              hourStart.setHours(now.getHours() - 1);
+              if (time >= hourStart && time <= now) {
+                timeCondition = true;
+              }
+              break;
+            default:
+              timeCondition = true;
+              break;
+          }
+
+          if (timeCondition) {
+            filteredLabels.push(timeStr);
+            filteredTemperatures.push(temp);
+            filteredHumidities.push(hum);
+          }
+        }
+      });
+
+      return {
+        labels: filteredLabels,
+        temperatures: filteredTemperatures,
+        humidities: filteredHumidities
+      };
+    }
+
     // 讀取資料並畫出圖表
-    async function fetchDataAndDraw() {
+    async function fetchDataAndDraw(range = 'today') {
       try {
         const res = await fetch(url);
         const text = await res.text();
         const json = JSON.parse(text.substring(47).slice(0, -2));
         const rows = json.table.rows;
 
-        const labels = [];
-        const temperatures = [];
-        const humidities = [];
-
-        // 讀取資料
-        rows.forEach(row => {
-          const time = row.c[0]?.v;
-          const temp = row.c[1]?.v;
-          const hum = row.c[2]?.v;
-
-          if (time && temp && hum) {
-            labels.push(time);
-            temperatures.push(temp);
-            humidities.push(hum);
-          }
-        });
+        const { labels, temperatures, humidities } = filterDataByTimeRange(rows, range);
 
         // 畫出折線圖
         const ctx = document.getElementById('lineChart').getContext('2d');
@@ -112,6 +173,11 @@
             },
             scales: {
               x: {
+                type: 'time', // 設定x軸為時間格式
+                time: {
+                  unit: 'minute', // 顯示為分鐘
+                  tooltipFormat: 'll HH:mm',
+                },
                 ticks: {
                   maxRotation: 90,
                   minRotation: 45,
@@ -127,7 +193,15 @@
       }
     }
 
-    fetchDataAndDraw(); // 初始讀取資料並畫圖
+    // 初始化顯示資料
+    fetchDataAndDraw(); 
+
+    // 當使用者選擇不同時間範圍時，重新載入資料
+    document.getElementById('timeRangeSelect').addEventListener('change', function(event) {
+      const selectedRange = event.target.value;
+      fetchDataAndDraw(selectedRange);
+    });
+
   </script>
 </body>
 </html>
