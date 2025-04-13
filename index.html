@@ -44,7 +44,6 @@
   <script>
     let chart;
 
-    // 顯示現在時間
     function updateTime() {
       const now = new Date();
       const formatted = now.getFullYear() + '/' +
@@ -62,6 +61,25 @@
     const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
     const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+
+    function parseTaiwanDatetime(twStr) {
+      const regex = /^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(上午|下午)\s+(\d{1,2}):(\d{2}):(\d{2})$/;
+      const match = twStr.match(regex);
+      if (!match) return null;
+
+      let [_, year, month, day, meridiem, hour, minute, second] = match;
+      year = parseInt(year);
+      month = parseInt(month) - 1;
+      day = parseInt(day);
+      hour = parseInt(hour);
+      minute = parseInt(minute);
+      second = parseInt(second);
+
+      if (meridiem === '下午' && hour !== 12) hour += 12;
+      if (meridiem === '上午' && hour === 12) hour = 0;
+
+      return new Date(year, month, day, hour, minute, second);
+    }
 
     async function fetchDataAndDraw(range) {
       try {
@@ -82,11 +100,8 @@
 
           if (!timeStr || !temp || !hum) return;
 
-          // 將時間字串轉為 Date 物件
-          const [datePart, timePart] = timeStr.split(' ');
-          const [year, month, day] = datePart.split('/').map(Number);
-          const [hour, minute, second] = timePart.split(':').map(Number);
-          const time = new Date(year, month - 1, day, hour, minute, second);
+          const time = parseTaiwanDatetime(timeStr);
+          if (!time) return;
 
           let include = false;
           if (range === '1h') {
@@ -100,7 +115,8 @@
           }
 
           if (include) {
-            labels.push(timeStr);
+            const formattedTime = `${time.getFullYear()}/${time.getMonth() + 1}/${time.getDate()} ${time.getHours()}:${String(time.getMinutes()).padStart(2, '0')}`;
+            labels.push(formattedTime);
             temperatures.push(temp);
             humidities.push(hum);
           }
@@ -176,12 +192,11 @@
       });
     }
 
-    // 下拉選單監聽
     document.getElementById('rangeSelect').addEventListener('change', (e) => {
       fetchDataAndDraw(e.target.value);
     });
 
-    fetchDataAndDraw('day'); // 預設讀取本日資料
+    fetchDataAndDraw('day');
   </script>
 </body>
 </html>
