@@ -22,11 +22,29 @@
     canvas {
       max-width: 100%;
     }
+    .range-buttons {
+      margin-bottom: 20px;
+    }
+    .range-buttons button {
+      margin: 0 5px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <h1>溫度與濕度變化趨勢圖</h1>
   <div id="currentTime">現在時間：--:--:--</div>
+
+  <!-- 時間篩選按鈕 -->
+  <div class="range-buttons">
+    <button onclick="updateChartByRange('1h')">最近一小時</button>
+    <button onclick="updateChartByRange('1d')">今日</button>
+    <button onclick="updateChartByRange('1w')">本週</button>
+  </div>
+
+  <!-- 折線圖 -->
   <canvas id="lineChart"></canvas>
 
   <script>
@@ -41,90 +59,142 @@
                         String(now.getSeconds()).padStart(2, '0');
       document.getElementById('currentTime').innerText = '現在時間：' + formatted;
     }
-
     setInterval(updateTime, 1000);
     updateTime();
 
-    // Google Sheet 資料讀取
+    // 變數儲存原始資料
+    let allLabels = [];
+    let allTemperatures = [];
+    let allHumidities = [];
+    let chart = null;
+
+    // 讀取 Google Sheet 資料
     const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
-    const sheetName = '表單回應 1'; // 工作表名稱
+    const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
     fetch(url)
       .then(res => res.text())
       .then(text => {
-        // 解析 Google Sheets 的 JSON 資料
         const json = JSON.parse(text.substring(47).slice(0, -2));
         const rows = json.table.rows;
 
-        // 準備儲存溫度和濕度資料
-        const labels = [];
-        const temperatures = [];
-        const humidities = [];
-
-        // 讀取每一列資料
-        rows.forEach((row, index) => {
-          const time = row.c[0]?.v;
+        rows.forEach(row => {
+          const timeStr = row.c[0]?.v;
           const temp = row.c[1]?.v;
           const hum = row.c[2]?.v;
 
-          if (time && temp && hum) {
-            labels.push(time);
-            temperatures.push(temp);
-            humidities.push(hum);
+          if (timeStr && temp && hum) {
+            const time = new Date(timeStr);
+            allLabels.push(time);
+            allTemperatures.push(temp);
+            allHumidities.push(hum);
           }
         });
 
-        // 畫出折線圖
-        const ctx = document.getElementById('lineChart').getContext('2d');
-        new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: '溫度 (°C)',
-                data: temperatures,
-                borderColor: 'rgb(255, 99, 132)',
-                fill: false,
-                tension: 0.1
-              },
-              {
-                label: '濕度 (%)',
-                data: humidities,
-                borderColor: 'rgb(54, 162, 235)',
-                fill: false,
-                tension: 0.1
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                position: 'top',
-              },
-              title: {
-                display: true,
-                text: '即時溫濕度趨勢圖'
-              }
-            },
-            scales: {
-              x: {
-                ticks: {
-                  maxRotation: 90,
-                  minRotation: 45,
-                  autoSkip: true,
-                }
-              }
-            }
-          }
-        });
+        // 預設顯示本週資料
+        updateChartByRange('1w');
       })
       .catch(error => {
         console.error('資料讀取錯誤:', error);
         document.getElementById('currentTime').innerText = '資料載入失敗！';
       });
+
+    // 更新圖表依時間範圍
+    function updateChartByRange(range) {
+      const now = new Date();
+      let cutoff;
+
+      if (range === '1h') {
+        cutoff = new Date(now.getTime() - 60 * 60 * 1000);
+      } else if (range === '1d') {
+        cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      } else if (range === '1w') {
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1); // 計算週一
+        cutoff = new Date(now.getFullYear(), now.getMonth(), diff);
+      }
+
+      const labels = [];
+      const temperatures = [];
+      const humidities = [];
+
+      for (let i = 0; i < allLabels.length; i++) {
+        if (allLabels[i] >= cutoff) {
+          labels.push(formatTime(allLabels[i]));
+          temperatures.push(allTemperatures[i]);
+          humidities.push(allHumidities[i]);
+        }
+      }
+
+      drawChart(labels, temperatures, humidities);
+    }
+
+    // 繪製圖表
+    function drawChart(labels, temperatures, humidities) {
+      const ctx = document.getElementById('lineChart').getContext('2d');
+
+      if (chart) {
+        chart.destroy();
+      }
+
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '溫度 (°C)',
+              data: temperatures,
+              borderColor: 'rgb(255, 99, 132)',
+              fill: false,
+              tension: 0.1
+            },
+            {
+              label: '濕度 (%)',
+              data: humidities,
+              borderColor: 'rgb(54, 162, 235)',
+              fill: false,
+              tension: 0.1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'top' },
+            title: {
+              display: true,
+              text: '即時溫濕度趨勢圖'
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                maxRotation: 90,
+                minRotation: 45,
+                autoSkip: true
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // 時間格式化 (HH:mm 或 MM/DD HH:mm)
+    function formatTime(date) {
+      const now = new Date();
+      const sameDay = date.toDateString() === now.toDateString();
+
+      if (sameDay) {
+        return String(date.getHours()).padStart(2, '0') + ':' +
+               String(date.getMinutes()).padStart(2, '0');
+      } else {
+        return (date.getMonth() + 1) + '/' + date.getDate() + ' ' +
+               String(date.getHours()).padStart(2, '0') + ':' +
+               String(date.getMinutes()).padStart(2, '0');
+      }
+    }
   </script>
 </body>
 </html>
