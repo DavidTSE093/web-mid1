@@ -22,23 +22,11 @@
     canvas {
       max-width: 100%;
     }
-    select {
-      margin-top: 10px;
-      padding: 5px;
-    }
   </style>
 </head>
 <body>
   <h1>溫度與濕度變化趨勢圖</h1>
   <div id="currentTime">現在時間：--:--:--</div>
-
-  <!-- 增加時間篩選選單 -->
-  <select id="timeFilter">
-    <option value="today">本日</option>
-    <option value="thisWeek">本週</option>
-    <option value="lastHour">最近一小時</option>
-  </select>
-
   <canvas id="lineChart"></canvas>
 
   <script>
@@ -62,108 +50,81 @@
     const sheetName = '表單回應 1'; // 工作表名稱
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
-    let chartData = {
-      labels: [],
-      temperatures: [],
-      humidities: [],
-      timeLabels: []
-    };
-
-    // 用來處理時間格式
-    function parseDate(dateStr) {
-      const dateParts = dateStr.replace('Date(', '').replace(')', '').split(',');
-      const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2], dateParts[3], dateParts[4], dateParts[5]);
-      return date;
-    }
-
-    // 資料讀取
     fetch(url)
       .then(res => res.text())
       .then(text => {
+        // 解析 Google Sheets 的 JSON 資料
         const json = JSON.parse(text.substring(47).slice(0, -2));
         const rows = json.table.rows;
 
+        // 準備儲存溫度和濕度資料
+        const labels = [];
+        const temperatures = [];
+        const humidities = [];
+
+        // 讀取每一列資料
         rows.forEach((row, index) => {
-          const timeStr = row.c[0]?.v; // 取得時間
+          const time = row.c[0]?.v;
           const temp = row.c[1]?.v;
           const hum = row.c[2]?.v;
 
-          if (timeStr && temp && hum) {
-            const date = parseDate(timeStr);
-            const formattedTime = date.getFullYear() + '/' +
-                                  String(date.getMonth() + 1).padStart(2, '0') + '/' +
-                                  String(date.getDate()).padStart(2, '0') + ' ' +
-                                  String(date.getHours()).padStart(2, '0') + ':' +
-                                  String(date.getMinutes()).padStart(2, '0') + ':' +
-                                  String(date.getSeconds()).padStart(2, '0');
-            chartData.labels.push(formattedTime);
-            chartData.temperatures.push(temp);
-            chartData.humidities.push(hum);
-            chartData.timeLabels.push(date); // 用於篩選資料的時間
+          if (time && temp && hum) {
+            labels.push(time);
+            temperatures.push(temp);
+            humidities.push(hum);
           }
         });
 
-        renderChart(chartData);
+        // 畫出折線圖
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: '溫度 (°C)',
+                data: temperatures,
+                borderColor: 'rgb(255, 99, 132)',
+                fill: false,
+                tension: 0.1
+              },
+              {
+                label: '濕度 (%)',
+                data: humidities,
+                borderColor: 'rgb(54, 162, 235)',
+                fill: false,
+                tension: 0.1
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'top',
+              },
+              title: {
+                display: true,
+                text: '即時溫濕度趨勢圖'
+              }
+            },
+            scales: {
+              x: {
+                ticks: {
+                  maxRotation: 90,
+                  minRotation: 45,
+                  autoSkip: true,
+                }
+              }
+            }
+          }
+        });
       })
       .catch(error => {
         console.error('資料讀取錯誤:', error);
         document.getElementById('currentTime').innerText = '資料載入失敗！';
       });
-
-    // 根據選擇的篩選條件過濾資料
-    document.getElementById('timeFilter').addEventListener('change', (e) => {
-      const filter = e.target.value;
-      let filteredData = filterData(filter);
-      renderChart(filteredData);
-    });
-
-    // 篩選資料
-    function filterData(filter) {
-      const now = new Date();
-      let startTime;
-      switch (filter) {
-        case 'today':
-          startTime = new Date(now.setHours(0, 0, 0, 0)); // 本日的開始時間
-          break;
-        case 'thisWeek':
-          const dayOfWeek = now.getDay();
-          startTime = new Date(now.setDate(now.getDate() - dayOfWeek)); // 本週的開始時間（星期天）
-          break;
-        case 'lastHour':
-          startTime = new Date(now.setHours(now.getHours() - 1)); // 最近一小時
-          break;
-        default:
-          startTime = now;
-      }
-
-      // 篩選大於等於開始時間的資料
-      const filteredLabels = [];
-      const filteredTemperatures = [];
-      const filteredHumidities = [];
-      const filteredTimeLabels = [];
-
-      chartData.timeLabels.forEach((time, index) => {
-        if (time >= startTime) {
-          filteredLabels.push(chartData.labels[index]);
-          filteredTemperatures.push(chartData.temperatures[index]);
-          filteredHumidities.push(chartData.humidities[index]);
-          filteredTimeLabels.push(chartData.timeLabels[index]);
-        }
-      });
-
-      return {
-        labels: filteredLabels,
-        temperatures: filteredTemperatures,
-        humidities: filteredHumidities,
-        timeLabels: filteredTimeLabels
-      };
-    }
-
-    // 渲染圖表
-    function renderChart(data) {
-      const ctx = document.getElementById('lineChart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: data.labels,
-          datasets
+  </script>
+</body>
+</html>
