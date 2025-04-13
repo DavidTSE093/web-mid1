@@ -19,11 +19,6 @@
       color: #333;
       margin-bottom: 20px;
     }
-    #rangeSelect {
-      font-size: 16px;
-      padding: 5px 10px;
-      margin-bottom: 20px;
-    }
     canvas {
       max-width: 100%;
     }
@@ -32,18 +27,10 @@
 <body>
   <h1>溫度與濕度變化趨勢圖</h1>
   <div id="currentTime">現在時間：--:--:--</div>
-
-  <select id="rangeSelect">
-    <option value="1h">最近一小時</option>
-    <option value="day" selected>本日</option>
-    <option value="week">本週</option>
-  </select>
-
   <canvas id="lineChart"></canvas>
 
   <script>
-    let chart;
-
+    // 顯示當下時間
     function updateTime() {
       const now = new Date();
       const formatted = now.getFullYear() + '/' +
@@ -58,128 +45,86 @@
     setInterval(updateTime, 1000);
     updateTime();
 
+    // Google Sheet 資料讀取
     const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
-    const sheetName = '表單回應 1';
+    const sheetName = '表單回應 1'; // 工作表名稱
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
-    async function fetchAndDraw(range) {
-      try {
-        const res = await fetch(url);
-        const text = await res.text();
+    fetch(url)
+      .then(res => res.text())
+      .then(text => {
+        // 解析 Google Sheets 的 JSON 資料
         const json = JSON.parse(text.substring(47).slice(0, -2));
         const rows = json.table.rows;
 
-        const now = new Date();
+        // 準備儲存溫度和濕度資料
         const labels = [];
         const temperatures = [];
         const humidities = [];
 
-        rows.forEach(row => {
-          const timeStr = row.c[0]?.v;
+        // 讀取每一列資料
+        rows.forEach((row, index) => {
+          const time = row.c[0]?.v;
           const temp = row.c[1]?.v;
           const hum = row.c[2]?.v;
 
-          if (!timeStr || !temp || !hum) return;
-
-          // 解析 Google 表單時間格式 "2025/04/13 13:22:45"
-          const [datePart, timePart] = timeStr.split(' ');
-          const [year, month, day] = datePart.split('/').map(Number);
-          const [hour, minute, second] = timePart.split(':').map(Number);
-          const time = new Date(year, month - 1, day, hour, minute, second);
-
-          let include = false;
-          if (range === '1h') {
-            include = (now - time <= 60 * 60 * 1000);
-          } else if (range === 'day') {
-            include = (time.toDateString() === now.toDateString());
-          } else if (range === 'week') {
-            const oneWeekAgo = new Date(now);
-            oneWeekAgo.setDate(now.getDate() - 7);
-            include = (time >= oneWeekAgo);
-          }
-
-          if (include) {
-            labels.push(timeStr);
+          if (time && temp && hum) {
+            labels.push(time);
             temperatures.push(temp);
             humidities.push(hum);
           }
         });
 
-        if (labels.length === 0) {
-          document.getElementById('currentTime').innerText = '目前所選時間範圍內無資料';
-        }
-
-        drawChart(labels, temperatures, humidities);
-      } catch (error) {
-        console.error('資料讀取錯誤:', error);
-        document.getElementById('currentTime').innerText = '資料載入失敗，請檢查試算表分享權限';
-      }
-    }
-
-    function drawChart(labels, temps, hums) {
-      const ctx = document.getElementById('lineChart').getContext('2d');
-      if (chart) chart.destroy();
-
-      chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: '溫度 (°C)',
-              data: temps,
-              borderColor: 'rgb(255, 99, 132)',
-              fill: false,
-              tension: 0.1
-            },
-            {
-              label: '濕度 (%)',
-              data: hums,
-              borderColor: 'rgb(54, 162, 235)',
-              fill: false,
-              tension: 0.1
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              position: 'top',
-            },
-            title: {
-              display: true,
-              text: '即時溫濕度趨勢圖'
-            }
+        // 畫出折線圖
+        const ctx = document.getElementById('lineChart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: '溫度 (°C)',
+                data: temperatures,
+                borderColor: 'rgb(255, 99, 132)',
+                fill: false,
+                tension: 0.1
+              },
+              {
+                label: '濕度 (%)',
+                data: humidities,
+                borderColor: 'rgb(54, 162, 235)',
+                fill: false,
+                tension: 0.1
+              }
+            ]
           },
-          scales: {
-            x: {
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'top',
+              },
               title: {
                 display: true,
-                text: '時間'
-              },
-              ticks: {
-                maxRotation: 90,
-                minRotation: 45,
-                autoSkip: true,
+                text: '即時溫濕度趨勢圖'
               }
             },
-            y: {
-              title: {
-                display: true,
-                text: '數值'
+            scales: {
+              x: {
+                ticks: {
+                  maxRotation: 90,
+                  minRotation: 45,
+                  autoSkip: true,
+                }
               }
             }
           }
-        }
+        });
+      })
+      .catch(error => {
+        console.error('資料讀取錯誤:', error);
+        document.getElementById('currentTime').innerText = '資料載入失敗！';
       });
-    }
-
-    document.getElementById('rangeSelect').addEventListener('change', (e) => {
-      fetchAndDraw(e.target.value);
-    });
-
-    fetchAndDraw('day'); // 預設為本日資料
   </script>
 </body>
 </html>
