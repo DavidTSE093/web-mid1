@@ -70,13 +70,18 @@
     // 解析時間格式
     function parseTime(str) {
       if (!str) return null;
-      str = str.replace('上午', 'AM').replace('下午', 'PM');
-      return new Date(str);
+      try {
+        str = str.replace('上午', 'AM').replace('下午', 'PM');
+        const date = new Date(str);
+        return isNaN(date.getTime()) ? null : date;
+      } catch (e) {
+        return null;
+      }
     }
 
     // 格式化 X 軸標籤
     function formatLabel(date) {
-      return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+      return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
     }
 
     let allData = [];
@@ -99,7 +104,7 @@
           const temp = parseFloat(row.c[1]?.v || 0);
           const hum = parseFloat(row.c[2]?.v || 0);
           return { time, temp, hum };
-        }).filter(d => d.time && !isNaN(d.time.getTime())); // 確保時間有效
+        }).filter(d => d.time && !isNaN(d.time.getTime()));
 
         if (allData.length === 0) {
           document.getElementById('errorMessage').innerText = '無有效資料可顯示';
@@ -119,31 +124,38 @@
     function updateChart(range) {
       document.getElementById('errorMessage').style.display = 'none'; // 重置錯誤訊息
 
-      // 以資料最新時間為基準
-      const latestTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
+      // 計算時間範圍
+      const minTime = allData.length > 0 ? new Date(Math.min(...allData.map(d => d.time))) : new Date();
+      const maxTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
       let filtered = allData;
-      let titleText = '溫濕度變化';
+      let titleText = '溫濕度變化（全部資料）';
+      let fallbackToAll = false;
 
-      // 根據範圍過濾資料
       if (range !== 'all') {
         let from;
         if (range === '1h') {
-          from = new Date(latestTime.getTime() - 60 * 60 * 1000); // 1 小時
+          from = new Date(maxTime.getTime() - 60 * 60 * 1000); // 1 小時
           titleText = '溫濕度變化（最近一小時）';
         } else if (range === '1d') {
-          from = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // 1 天
+          from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000); // 1 天
           titleText = '溫濕度變化（最近一天）';
         } else if (range === '1w') {
-          from = new Date(latestTime.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 週
+          from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 週
           titleText = '溫濕度變化（最近一週）';
         }
-        filtered = allData.filter(d => d.time >= from && d.time <= latestTime);
-      } else {
-        titleText = '溫濕度變化（全部資料）';
+        filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
+
+        if (filtered.length < 2 && range !== 'all') {
+          filtered = allData; // 回退顯示所有資料
+          fallbackToAll = true;
+          document.getElementById('errorMessage').innerText = `所選時間範圍（${range === '1h' ? '最近一小時' : range === '1d' ? '最近一天' : '最近一週'}）內資料不足，已顯示全部資料`;
+          document.getElementById('errorMessage').style.display = 'block';
+          titleText = '溫濕度變化（全部資料）';
+        }
       }
 
       if (filtered.length === 0) {
-        document.getElementById('errorMessage').innerText = `所選時間範圍（${range === '1h' ? '最近一小時' : range === '1d' ? '最近一天' : '最近一週'}）內無資料`;
+        document.getElementById('errorMessage').innerText = '無有效資料可顯示';
         document.getElementById('errorMessage').style.display = 'block';
         return;
       }
@@ -190,8 +202,8 @@
               ticks: {
                 maxRotation: 90,
                 minRotation: 45,
-                autoSkip: true,
-                maxTicksLimit: 10 // 限制標籤數量以提高可讀性
+                autoSkip: filtered.length > 10, // 少量資料時顯示所有標籤
+                maxTicksLimit: 10
               }
             }
           }
