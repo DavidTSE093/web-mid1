@@ -11,8 +11,12 @@
       background-color: #f0f0f0;
       text-align: center;
     }
+    h1 {
+      margin-bottom: 10px;
+    }
     #currentTime {
       font-size: 18px;
+      color: #333;
       margin-bottom: 20px;
     }
     .buttons {
@@ -21,6 +25,7 @@
     .buttons button {
       margin: 0 5px;
       padding: 8px 12px;
+      cursor: pointer;
     }
     canvas {
       max-width: 100%;
@@ -42,13 +47,13 @@
     <button onclick="updateChart('1h')">最近 1 小時</button>
     <button onclick="updateChart('1d')">最近 1 天</button>
     <button onclick="updateChart('1w')">最近 1 週</button>
-    <button onclick="updateChart('all')">全部資料</ peckbutton>
+    <button onclick="updateChart('all')">全部資料</button>
   </div>
 
   <canvas id="lineChart"></canvas>
 
   <script>
-    // 更新目前時間顯示
+    // 更新當前時間
     function updateTime() {
       const now = new Date();
       const formatted = now.getFullYear() + '/' +
@@ -62,7 +67,7 @@
     setInterval(updateTime, 1000);
     updateTime();
 
-    // 解析 Google Sheets 時間格式
+    // 解析時間格式
     function parseTime(str) {
       if (!str) return null;
       str = str.replace('上午', 'AM').replace('下午', 'PM');
@@ -82,19 +87,19 @@
     const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
-    // 從 Google Sheets 獲取資料
+    // 載入 Google Sheets 資料
     fetch(url)
       .then(res => res.text())
       .then(text => {
         const json = JSON.parse(text.substring(47).slice(0, -2));
-        const rows = json.table.rows.slice(1); // 跳過第一行標題
+        const rows = json.table.rows.slice(1); // 跳過標題行
 
         allData = rows.map(row => {
           const time = parseTime(row.c[0]?.v);
           const temp = parseFloat(row.c[1]?.v || 0);
           const hum = parseFloat(row.c[2]?.v || 0);
           return { time, temp, hum };
-        }).filter(d => d.time && !isNaN(d.time)); // 過濾無效時間
+        }).filter(d => d.time && !isNaN(d.time.getTime())); // 確保時間有效
 
         if (allData.length === 0) {
           document.getElementById('errorMessage').innerText = '無有效資料可顯示';
@@ -102,19 +107,20 @@
           return;
         }
 
-        updateChart('1w'); // 預設顯示最近 1 週
+        updateChart('all'); // 預設顯示全部資料
       })
-      .catch(err => {
+      .catch(error => {
         document.getElementById('errorMessage').innerText = '⚠️ 資料載入失敗，請檢查 Google Sheets 權限';
         document.getElementById('errorMessage').style.display = 'block';
-        console.error('資料錯誤：', err);
+        console.error('資料讀取錯誤:', error);
       });
 
     // 更新圖表
     function updateChart(range) {
-      // 找到資料中最新的時間點
-      const latestTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
+      document.getElementById('errorMessage').style.display = 'none'; // 重置錯誤訊息
 
+      // 以資料最新時間為基準
+      const latestTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
       let filtered = allData;
       let titleText = '溫濕度變化';
 
@@ -122,33 +128,31 @@
       if (range !== 'all') {
         let from;
         if (range === '1h') {
-          from = new Date(latestTime.getTime() - 60 * 60 * 1000); // 最近 1 小時
+          from = new Date(latestTime.getTime() - 60 * 60 * 1000); // 1 小時
           titleText = '溫濕度變化（最近一小時）';
         } else if (range === '1d') {
-          from = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // 最近 1 天
+          from = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // 1 天
           titleText = '溫濕度變化（最近一天）';
         } else if (range === '1w') {
-          from = new Date(latestTime.getTime() - 7 * 24 * 60 * 60 * 1000); // 最近 1 週
+          from = new Date(latestTime.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 週
           titleText = '溫濕度變化（最近一週）';
         }
-        filtered = allData.filter(d => d.time >= from);
+        filtered = allData.filter(d => d.time >= from && d.time <= latestTime);
       } else {
         titleText = '溫濕度變化（全部資料）';
       }
 
       if (filtered.length === 0) {
-        document.getElementById('errorMessage').innerText = '所選時間範圍內無資料';
+        document.getElementById('errorMessage').innerText = `所選時間範圍（${range === '1h' ? '最近一小時' : range === '1d' ? '最近一天' : '最近一週'}）內無資料`;
         document.getElementById('errorMessage').style.display = 'block';
         return;
-      } else {
-        document.getElementById('errorMessage').style.display = 'none';
       }
 
       const labels = filtered.map(d => formatLabel(d.time));
       const temps = filtered.map(d => d.temp);
       const hums = filtered.map(d => d.hum);
 
-      // 銷毀舊圖表
+      // 繪製圖表
       if (chart) chart.destroy();
       const ctx = document.getElementById('lineChart').getContext('2d');
       chart = new Chart(ctx, {
@@ -186,7 +190,8 @@
               ticks: {
                 maxRotation: 90,
                 minRotation: 45,
-                autoSkip: true
+                autoSkip: true,
+                maxTicksLimit: 10 // 限制標籤數量以提高可讀性
               }
             }
           }
