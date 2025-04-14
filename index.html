@@ -209,11 +209,6 @@
       }
     }
 
-    // 格式化 X 軸標籤
-    function formatLabel(date) {
-      return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-    }
-
     let allData = [];
     let chart = null;
 
@@ -239,8 +234,8 @@
 
           allData = rows.map((row, index) => {
             const time = parseTime(row.c[0]?.v);
-            const temp = parseFloat(row.c[1]?.v || 0);
-            const hum = parseFloat(row.c[2]?.v || 0);
+            const temp = row.c[1]?.v != null ? parseFloat(row.c[1].v) : null;
+            const hum = row.c[2]?.v != null ? parseFloat(row.c[2].v) : null;
             console.log(`Row ${index + 2}:`, { time: row.c[0]?.v, parsedTime: time, temp, hum });
             return { time, temp, hum };
           }).filter(d => d.time && !isNaN(d.time.getTime()));
@@ -271,69 +266,98 @@
     function updateChart(range) {
       document.getElementById('errorMessage').style.display = 'none';
 
-      const minTime = allData.length > 0 ? new Date(Math.min(...allData.map(d => d.time))) : new Date();
       const maxTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
       let filtered = allData;
-      let titleText = '溫濕度變化（最近一週）';
-      let fallbackToAll = false;
+      let labels = [];
+      let temps = [];
+      let hums = [];
+      let titleText = '溫濕度變化';
 
-      if (range !== 'all') {
-        let from;
-        if (range === '1h') {
-          from = new Date(maxTime.getTime() - 60 * 60 * 1000);
-          titleText = '溫濕度變化（最近一小時）';
-        } else if (range === '1d') {
-          from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000);
-          titleText = '溫濕度變化（最近一天）';
-        } else if (range === '1w') {
-          from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000);
-          titleText = '溫濕度變化（最近一週）';
-        }
+      if (range === '1h') {
+        // 最近 1 小時：分鐘為單位
+        const from = new Date(maxTime.getTime() - 60 * 60 * 1000);
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
+        titleText = '溫濕度變化（最近 1 小時）';
 
-        if (filtered.length < 2) {
-          filtered = allData;
-          fallbackToAll = true;
-          document.getElementById('errorMessage').innerText = `所選時間範圍（${range === '1h' ? '最近一小時' : range === '1d' ? '最近一天' : '最近一週'}）內資料不足，已顯示全部資料`;
+        // 生成 0-60 分鐘標籤
+        for (let i = 0; i <= 60; i++) {
+          labels.push(i.toString());
+          const minuteStart = new Date(maxTime.getTime() - (60 - i) * 60 * 1000);
+          const minuteEnd = new Date(minuteStart.getTime() + 60 * 1000);
+          const dataPoint = filtered
+            .filter(d => d.time >= minuteStart && d.time < minuteEnd)
+            .sort((a, b) => b.time - a.time)[0]; // 取最新一筆
+          temps.push(dataPoint ? dataPoint.temp : null);
+          hums.push(dataPoint ? dataPoint.hum : null);
+        }
+      } else if (range === '1d') {
+        // 最近 1 天：小時為單位
+        const from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000);
+        filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
+        titleText = '溫濕度變化（最近 1 天）';
+
+        // 生成 0-23 小時標籤
+        for (let i = 0; i < 24; i++) {
+          labels.push(i.toString());
+          const hourStart = new Date(maxTime.getTime() - (23 - i) * 60 * 60 * 1000);
+          const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
+          const dataPoint = filtered
+            .filter(d => d.time >= hourStart && d.time < hourEnd)
+            .sort((a, b) => b.time - a.time)[0];
+          temps.push(dataPoint ? dataPoint.temp : null);
+          hums.push(dataPoint ? dataPoint.hum : null);
+        }
+      } else if (range === '1w') {
+        // 最近 1 週：天為單位（週一至週日）
+        const from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000);
+        filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
+        titleText = '溫濕度變化（最近 1 週）';
+
+        // 生成週一至週日標籤
+        const days = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+        const weekStart = new Date(maxTime);
+        weekStart.setDate(maxTime.getDate() - (maxTime.getDay() || 7) + 1); // 調整到週一
+        for (let i = 0; i < 7; i++) {
+          const dayStart = new Date(weekStart.getTime() + i * 24 * 60 * 60 * 1000);
+          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+          labels.push(days[i]);
+          const dataPoint = filtered
+            .filter(d => d.time >= dayStart && d.time < dayEnd)
+            .sort((a, b) => b.time - a.time)[0];
+          temps.push(dataPoint ? dataPoint.temp : null);
+          hums.push(dataPoint ? dataPoint.hum : null);
+        }
+      } else {
+        // 全部資料：按天
+        filtered = allData.slice().sort((a, b) => a.time - b.time);
+        titleText = '溫濕度變化（全部資料）';
+        if (filtered.length === 0) {
+          document.getElementById('errorMessage').innerText = '無有效資料可顯示';
           document.getElementById('errorMessage').style.display = 'block';
-          titleText = '溫濕度變化（全部資料）';
+          return;
+        }
+
+        // 按天生成標籤
+        const minTime = new Date(Math.min(...filtered.map(d => d.time)));
+        const maxTime = new Date(Math.max(...filtered.map(d => d.time)));
+        const daysDiff = Math.ceil((maxTime - minTime) / (24 * 60 * 60 * 1000));
+        for (let i = 0; i <= daysDiff; i++) {
+          const dayStart = new Date(minTime.getTime() + i * 24 * 60 * 60 * 1000);
+          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+          const dateStr = `${dayStart.getMonth() + 1}/${dayStart.getDate()}`;
+          labels.push(dateStr);
+          const dataPoint = filtered
+            .filter(d => d.time >= dayStart && d.time < dayEnd)
+            .sort((a, b) => b.time - a.time)[0];
+          temps.push(dataPoint ? dataPoint.temp : null);
+          hums.push(dataPoint ? dataPoint.hum : null);
         }
       }
 
-      if (filtered.length === 0) {
+      if (labels.length === 0) {
         document.getElementById('errorMessage').innerText = '無有效資料可顯示';
         document.getElementById('errorMessage').style.display = 'block';
         return;
-      }
-
-      filtered.sort((a, b) => a.time - b.time);
-
-      const labels = [];
-      const temps = [];
-      const hums = [];
-      const gapThreshold = 5 * 60 * 1000;
-
-      if (range === '1d') {
-        for (let i = 0; i < filtered.length; i++) {
-          labels.push(formatLabel(filtered[i].time));
-          temps.push(filtered[i].temp);
-          hums.push(filtered[i].hum);
-          if (i < filtered.length - 1) {
-            const currentTime = filtered[i].time.getTime();
-            const nextTime = filtered[i + 1].time.getTime();
-            if (nextTime - currentTime > gapThreshold) {
-              labels.push(formatLabel(new Date(currentTime + gapThreshold / 2)));
-              temps.push(null);
-              hums.push(null);
-            }
-          }
-        }
-      } else {
-        filtered.forEach(d => {
-          labels.push(formatLabel(d.time));
-          temps.push(d.temp);
-          hums.push(d.hum);
-        });
       }
 
       console.log('Chart data:', { labels, temps, hums });
@@ -353,7 +377,7 @@
               borderWidth: 2,
               pointRadius: 4,
               pointHoverRadius: 6,
-              tension: 0.2,
+              tension: 0,
               fill: false,
               spanGaps: false
             },
@@ -365,7 +389,7 @@
               borderWidth: 2,
               pointRadius: 4,
               pointHoverRadius: 6,
-              tension: 0.2,
+              tension: 0,
               fill: false,
               spanGaps: false
             }
@@ -388,11 +412,15 @@
           },
           scales: {
             x: {
+              title: {
+                display: true,
+                text: range === '1h' ? '分鐘' : range === '1d' ? '小時' : range === '1w' ? '星期' : '日期'
+              },
               ticks: {
                 maxRotation: 90,
                 minRotation: 45,
-                autoSkip: true,
-                maxTicksLimit: 20,
+                autoSkip: range !== '1h', // 1 小時顯示所有分鐘
+                maxTicksLimit: range === '1h' ? 60 : range === '1d' ? 24 : range === '1w' ? 7 : 20,
                 font: { size: 12 }
               },
               grid: { display: false }
