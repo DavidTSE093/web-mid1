@@ -417,7 +417,7 @@
 
     function fetchWeatherData(stationId, regionName) {
       document.getElementById('loading').style.display = 'block';
-      const apiKey = '{YOUR_API_KEY}'; // 請替換為您的 CWA API 金鑰
+      const apiKey = '{CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB}'; // 請替換為您的 CWA API 金鑰
       const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationId}`;
 
       fetch(weatherUrl)
