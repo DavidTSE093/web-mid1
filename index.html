@@ -28,7 +28,7 @@
     #errorMessage {
       color: red;
       font-size: 16px;
-      margin-bottom: 10px;
+      margin-top: 10px;
       display: none;
     }
   </style>
@@ -40,9 +40,9 @@
 
   <div class="buttons">
     <button onclick="updateChart('1h')">最近 1 小時</button>
-    <button onclick="updateChart('1d')">今日</button>
-    <button onclick="updateChart('1w')">本週</button>
-    <button onclick="fetchData()">重新整理</button>
+    <button onclick="updateChart('1d')">最近 1 天</button>
+    <button onclick="updateChart('1w')">最近 1 週</button>
+    <button onclick="updateChart('all')">全部資料</ peckbutton>
   </div>
 
   <canvas id="lineChart"></canvas>
@@ -64,15 +64,9 @@
 
     // 解析 Google Sheets 時間格式
     function parseTime(str) {
-      try {
-        str = str.replace('上午', 'AM').replace('下午', 'PM');
-        const date = new Date(str);
-        if (isNaN(date)) throw new Error('Invalid date format');
-        return date;
-      } catch (e) {
-        console.error('時間解析失敗:', str, e);
-        return null;
-      }
+      if (!str) return null;
+      str = str.replace('上午', 'AM').replace('下午', 'PM');
+      return new Date(str);
     }
 
     // 格式化 X 軸標籤
@@ -82,92 +76,77 @@
 
     let allData = [];
     let chart = null;
-    let lastRange = '1w'; // 記錄最後選擇的範圍
 
     // Google Sheets 資料來源
     const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
     const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
-    // 顯示錯誤訊息
-    function showError(message) {
-      const errorDiv = document.getElementById('errorMessage');
-      errorDiv.innerText = message;
-      errorDiv.style.display = 'block';
-    }
+    // 從 Google Sheets 獲取資料
+    fetch(url)
+      .then(res => res.text())
+      .then(text => {
+        const json = JSON.parse(text.substring(47).slice(0, -2));
+        const rows = json.table.rows.slice(1); // 跳過第一行標題
 
-    // 隱藏錯誤訊息
-    function hideError() {
-      const errorDiv = document.getElementById('errorMessage');
-      errorDiv.style.display = 'none';
-    }
+        allData = rows.map(row => {
+          const time = parseTime(row.c[0]?.v);
+          const temp = parseFloat(row.c[1]?.v || 0);
+          const hum = parseFloat(row.c[2]?.v || 0);
+          return { time, temp, hum };
+        }).filter(d => d.time && !isNaN(d.time)); // 過濾無效時間
 
-    // 載入資料
-    function fetchData() {
-      hideError();
-      fetch(url)
-        .then(res => {
-          if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
-          return res.text();
-        })
-        .then(text => {
-          let json;
-          try {
-            json = JSON.parse(text.substring(47).slice(0, -2));
-          } catch (e) {
-            throw new Error('JSON 解析失敗');
-          }
-          const rows = json.table.rows;
+        if (allData.length === 0) {
+          document.getElementById('errorMessage').innerText = '無有效資料可顯示';
+          document.getElementById('errorMessage').style.display = 'block';
+          return;
+        }
 
-          allData = rows.map(row => {
-            const time = parseTime(row.c[0]?.v || '');
-            const temp = parseFloat(row.c[1]?.v || 0);
-            const hum = parseFloat(row.c[2]?.v || 0);
-            return { time, temp, hum };
-          }).filter(d => d.time && !isNaN(d.time));
-
-          console.log('載入資料:', allData); // 除錯用
-          if (allData.length === 0) {
-            showError('無有效資料可顯示');
-            return;
-          }
-          updateChart(lastRange); // 使用最後選擇的範圍更新圖表
-        })
-        .catch(err => {
-          showError('⚠️ 資料載入失敗，請檢查網路或 Google Sheets 設定');
-          console.error('資料錯誤：', err);
-        });
-    }
+        updateChart('1w'); // 預設顯示最近 1 週
+      })
+      .catch(err => {
+        document.getElementById('errorMessage').innerText = '⚠️ 資料載入失敗，請檢查 Google Sheets 權限';
+        document.getElementById('errorMessage').style.display = 'block';
+        console.error('資料錯誤：', err);
+      });
 
     // 更新圖表
     function updateChart(range) {
-      lastRange = range;
-      const now = new Date();
-      let from;
+      // 找到資料中最新的時間點
+      const latestTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
 
-      // 設定時間範圍
-      if (range === '1h') {
-        from = new Date(now.getTime() - 60 * 60 * 1000);
-      } else if (range === '1d') {
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      } else if (range === '1w') {
-        const day = now.getDay() || 7; // 週日視為 7
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+      let filtered = allData;
+      let titleText = '溫濕度變化';
+
+      // 根據範圍過濾資料
+      if (range !== 'all') {
+        let from;
+        if (range === '1h') {
+          from = new Date(latestTime.getTime() - 60 * 60 * 1000); // 最近 1 小時
+          titleText = '溫濕度變化（最近一小時）';
+        } else if (range === '1d') {
+          from = new Date(latestTime.getTime() - 24 * 60 * 60 * 1000); // 最近 1 天
+          titleText = '溫濕度變化（最近一天）';
+        } else if (range === '1w') {
+          from = new Date(latestTime.getTime() - 7 * 24 * 60 * 60 * 1000); // 最近 1 週
+          titleText = '溫濕度變化（最近一週）';
+        }
+        filtered = allData.filter(d => d.time >= from);
+      } else {
+        titleText = '溫濕度變化（全部資料）';
       }
 
-      // 過濾資料
-      const filtered = allData.filter(d => d.time >= from);
-      console.log('過濾後資料:', filtered); // 除錯用
+      if (filtered.length === 0) {
+        document.getElementById('errorMessage').innerText = '所選時間範圍內無資料';
+        document.getElementById('errorMessage').style.display = 'block';
+        return;
+      } else {
+        document.getElementById('errorMessage').style.display = 'none';
+      }
+
       const labels = filtered.map(d => formatLabel(d.time));
       const temps = filtered.map(d => d.temp);
       const hums = filtered.map(d => d.hum);
-
-      // 檢查是否有資料
-      if (filtered.length === 0) {
-        showError(`無${range === '1h' ? '最近一小時' : range === '1d' ? '今日' : '本週'}的資料可顯示`);
-        if (chart) chart.destroy();
-        return;
-      }
 
       // 銷毀舊圖表
       if (chart) chart.destroy();
@@ -199,7 +178,7 @@
             legend: { position: 'top' },
             title: {
               display: true,
-              text: `溫濕度變化（${range === '1h' ? '最近一小時' : range === '1d' ? '今日' : '本週'}）`
+              text: titleText
             }
           },
           scales: {
@@ -213,11 +192,7 @@
           }
         }
       });
-      hideError();
     }
-
-    // 初次載入資料
-    fetchData();
   </script>
 </body>
 </html>
