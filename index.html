@@ -40,7 +40,7 @@
   <canvas id="lineChart"></canvas>
 
   <script>
-    // 顯示目前時間
+    // 更新目前時間顯示
     function updateTime() {
       const now = new Date();
       const formatted = now.getFullYear() + '/' +
@@ -54,12 +54,13 @@
     setInterval(updateTime, 1000);
     updateTime();
 
-    // 時間格式轉換（處理上午/下午）
+    // 解析 Google Sheets 時間格式（處理上午/下午）
     function parseTime(str) {
       str = str.replace('上午', 'AM').replace('下午', 'PM');
       return new Date(str);
     }
 
+    // 格式化 X 軸標籤
     function formatLabel(date) {
       return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
     }
@@ -67,10 +68,12 @@
     let allData = [];
     let chart = null;
 
+    // Google Sheets 資料來源
     const sheetID = '1ahKAqMB1cO5PYV_09f8oOsyiXzZw8Yq-zYBwNL8WLFo';
     const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
+    // 從 Google Sheets 獲取資料
     fetch(url)
       .then(res => res.text())
       .then(text => {
@@ -84,31 +87,35 @@
           return { time, temp, hum };
         }).filter(d => !isNaN(d.time));
 
-        updateChart('1w');
+        updateChart('1w'); // 預設顯示本週資料
       })
       .catch(err => {
         document.getElementById('currentTime').innerText = '⚠️ 資料載入失敗';
         console.error('資料錯誤：', err);
       });
 
+    // 更新圖表
     function updateChart(range) {
       const now = new Date();
       let from;
 
+      // 設定時間範圍
       if (range === '1h') {
         from = new Date(now.getTime() - 60 * 60 * 1000);
       } else if (range === '1d') {
         from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       } else if (range === '1w') {
-        const day = now.getDay() || 7; // 週日為 7
+        const day = now.getDay() || 7; // 週日視為 7
         from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
       }
 
+      // 過濾資料
       const filtered = allData.filter(d => d.time >= from);
       const labels = filtered.map(d => formatLabel(d.time));
       const temps = filtered.map(d => d.temp);
       const hums = filtered.map(d => d.hum);
 
+      // 銷毀舊圖表
       if (chart) chart.destroy();
       const ctx = document.getElementById('lineChart').getContext('2d');
       chart = new Chart(ctx, {
