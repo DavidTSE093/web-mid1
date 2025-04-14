@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>溫濕度趨勢圖</title>
+  <title>溫濕度趨勢圖與台灣天氣地圖</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -47,18 +47,17 @@
       background-color: #fff;
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
     }
     #errorMessage {
       color: white;
       font-size: 16px;
-      margin-top: 10px;
+      margin: 10px auto;
       padding: 10px;
       background-color: #dc3545;
       border-radius: 5px;
       display: none;
       max-width: 600px;
-      margin-left: auto;
-      margin-right: auto;
     }
     #loading {
       display: none;
@@ -80,6 +79,63 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+    #mapContainer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      margin-top: 20px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #taiwanMap {
+      width: 300px;
+      height: auto;
+    }
+    #taiwanMap path {
+      fill: #c0c0c0;
+      stroke: #333;
+      stroke-width: 1;
+      cursor: pointer;
+      transition: fill 0.3s;
+    }
+    #taiwanMap path:hover {
+      fill: #007bff;
+    }
+    #taiwanMap .selected {
+      fill: #ff5555;
+    }
+    #weatherInfo {
+      flex: 1;
+      min-width: 200px;
+      margin-left: 20px;
+      padding: 15px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      text-align: left;
+      font-size: 16px;
+    }
+    #weatherInfo h3 {
+      margin: 0 0 10px;
+      color: #333;
+    }
+    @media (max-width: 600px) {
+      #mapContainer {
+        flex-direction: column;
+        align-items: center;
+      }
+      #weatherInfo {
+        margin-left: 0;
+        margin-top: 20px;
+        width: 100%;
+      }
+      #taiwanMap {
+        width: 100%;
+        max-width: 300px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -97,6 +153,22 @@
   </div>
 
   <canvas id="lineChart"></canvas>
+
+  <div id="mapContainer">
+    <svg id="taiwanMap" viewBox="0 0 200 300">
+      <!-- 簡化版台灣 SVG，僅包含主要縣市 -->
+      <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="台北市"/>
+      <path id="newtaipei" d="M80,50 L100,50 L110,60 L100,70 L70,70 Z" title="新北市"/>
+      <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="桃園市"/>
+      <path id="taichung" d="M60,90 L100,90 L100,130 L50,130 Z" title="台中市"/>
+      <path id="tainan" d="M50,130 L100,130 L100,170 L40,170 Z" title="台南市"/>
+      <path id="kaohsiung" d="M40,170 L100,170 L100,210 L30,210 Z" title="高雄市"/>
+    </svg>
+    <div id="weatherInfo">
+      <h3>天氣資訊</h3>
+      <p>請點擊地圖上的地區以查看天氣資訊</p>
+    </div>
+  </div>
 
   <script>
     // 更新當前時間
@@ -117,7 +189,6 @@
     function parseTime(str) {
       if (!str) return null;
       try {
-        // 處理 Date(YYYY,MM,DD,HH,MM,SS) 格式
         if (str.startsWith('Date(')) {
           const matches = str.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
           if (matches) {
@@ -125,7 +196,6 @@
             return new Date(parseInt(year), parseInt(month), parseInt(day), parseInt(hour), parseInt(minute), parseInt(second));
           }
         }
-        // 處理 YYYY/MM/DD 上午/下午 HH:MM:SS 格式
         str = str.replace('上午', 'AM').replace('下午', 'PM');
         const date = new Date(str);
         return isNaN(date.getTime()) ? null : date;
@@ -135,7 +205,7 @@
       }
     }
 
-    // 格式化 X 軸標籤
+    // 格式化 X  éléments
     function formatLabel(date) {
       return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
     }
@@ -148,7 +218,7 @@
     const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
-    // 載入資料函數
+    // 載入 Google Sheets 資料
     function fetchData() {
       document.getElementById('loading').style.display = 'block';
       document.getElementById('errorMessage').style.display = 'none';
@@ -161,7 +231,7 @@
           console.log('Raw JSON:', text.substring(0, 500) + '...');
           const json = JSON.parse(text.substring(47).slice(0, -2));
           console.log('Parsed rows:', json.table.rows);
-          const rows = json.table.rows.slice(1); // 跳過標題行
+          const rows = json.table.rows.slice(1);
 
           allData = rows.map((row, index) => {
             const time = parseTime(row.c[0]?.v);
@@ -180,7 +250,7 @@
             return;
           }
 
-          updateChart('all'); // 預設顯示全部資料
+          updateChart('all');
         })
         .catch(error => {
           document.getElementById('loading').style.display = 'none';
@@ -197,7 +267,6 @@
     function updateChart(range) {
       document.getElementById('errorMessage').style.display = 'none';
 
-      // 計算時間範圍
       const minTime = allData.length > 0 ? new Date(Math.min(...allData.map(d => d.time))) : new Date();
       const maxTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
       let filtered = allData;
@@ -207,13 +276,13 @@
       if (range !== 'all') {
         let from;
         if (range === '1h') {
-          from = new Date(maxTime.getTime() - 60 * 60 * 1000); // 1 小時
+          from = new Date(maxTime.getTime() - 60 * 60 * 1000);
           titleText = '溫濕度變化（最近一小時）';
         } else if (range === '1d') {
-          from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000); // 1 天
+          from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000);
           titleText = '溫濕度變化（最近一天）';
         } else if (range === '1w') {
-          from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 週
+          from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000);
           titleText = '溫濕度變化（最近一週）';
         }
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
@@ -233,27 +302,22 @@
         return;
       }
 
-      // 排序資料按時間
       filtered.sort((a, b) => a.time - b.time);
 
-      // 處理「最近一天」的中斷
       const labels = [];
       const temps = [];
       const hums = [];
-      const gapThreshold = 5 * 60 * 1000; // 5 分鐘閾值
+      const gapThreshold = 5 * 60 * 1000;
 
       if (range === '1d') {
         for (let i = 0; i < filtered.length; i++) {
           labels.push(formatLabel(filtered[i].time));
           temps.push(filtered[i].temp);
           hums.push(filtered[i].hum);
-
-          // 檢查下一個點是否中斷
           if (i < filtered.length - 1) {
             const currentTime = filtered[i].time.getTime();
             const nextTime = filtered[i + 1].time.getTime();
             if (nextTime - currentTime > gapThreshold) {
-              // 插入空白點
               labels.push(formatLabel(new Date(currentTime + gapThreshold / 2)));
               temps.push(null);
               hums.push(null);
@@ -261,7 +325,6 @@
           }
         }
       } else {
-        // 其他範圍保持連續
         filtered.forEach(d => {
           labels.push(formatLabel(d.time));
           temps.push(d.temp);
@@ -271,7 +334,6 @@
 
       console.log('Chart data:', { labels, temps, hums });
 
-      // 繪製圖表
       if (chart) chart.destroy();
       const ctx = document.getElementById('lineChart').getContext('2d');
       chart = new Chart(ctx, {
@@ -342,6 +404,72 @@
         }
       });
     }
+
+    // 地圖點擊與天氣資料
+    const stationMap = {
+      'taipei': { name: '台北市', stationId: 'C0A9F' },
+      'newtaipei': { name: '新北市', stationId: 'C0AH7' },
+      'taoyuan': { name: '桃園市', stationId: 'C0C48' },
+      'taichung': { name: '台中市', stationId: 'C0F9L' },
+      'tainan': { name: '台南市', stationId: 'C0O90' },
+      'kaohsiung': { name: '高雄市', stationId: 'C0R17' }
+    };
+
+    function fetchWeatherData(stationId, regionName) {
+      document.getElementById('loading').style.display = 'block';
+      const apiKey = '{YOUR_API_KEY}'; // 請替換為您的 CWA API 金鑰
+      const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationId}`;
+
+      fetch(weatherUrl)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('loading').style.display = 'none';
+          const observation = data.records.station[0]?.obsTime?.weatherElement;
+          if (observation) {
+            const temp = observation.find(el => el.elementName === 'TEMP')?.elementValue || 'N/A';
+            const weather = observation.find(el => el.elementName === 'Weather')?.elementValue || 'N/A';
+            document.getElementById('weatherInfo').innerHTML = `
+              <h3>${regionName}</h3>
+              <p>溫度：${temp}°C</p>
+              <p>天氣：${weather}</p>
+            `;
+          } else {
+            document.getElementById('weatherInfo').innerHTML = `
+              <h3>${regionName}</h3>
+              <p>無法獲取天氣資料</p>
+            `;
+          }
+        })
+        .catch(error => {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('weatherInfo').innerHTML = `
+            <h3>${regionName}</h3>
+            <p>⚠️ 資料載入失敗，請檢查 API 金鑰或網路</p>
+          `;
+          console.error('天氣資料錯誤:', error);
+        });
+    }
+
+    // 地圖點擊事件
+    const paths = document.querySelectorAll('#taiwanMap path');
+    paths.forEach(path => {
+      path.addEventListener('click', () => {
+        // 重置選中樣式
+        paths.forEach(p => p.classList.remove('selected'));
+        path.classList.add('selected');
+
+        const regionId = path.id;
+        const region = stationMap[regionId];
+        if (region) {
+          fetchWeatherData(region.stationId, region.name);
+        } else {
+          document.getElementById('weatherInfo').innerHTML = `
+            <h3>未知地區</h3>
+            <p>請選擇有效地區</p>
+          `;
+        }
+      });
+    });
   </script>
 </body>
 </html>
