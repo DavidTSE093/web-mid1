@@ -71,6 +71,16 @@
     function parseTime(str) {
       if (!str) return null;
       try {
+        // 處理 Date(YYYY,MM,DD,HH,MM,SS) 格式
+        if (str.startsWith('Date(')) {
+          const matches = str.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+          if (matches) {
+            const [, year, month, day, hour, minute, second] = matches;
+            // 月份從 0 開始，需減 1
+            return new Date(parseInt(year), parseInt(month), parseInt(day), parseInt(hour), parseInt(minute), parseInt(second));
+          }
+        }
+        // 處理 YYYY/MM/DD 上午/下午 HH:MM:SS 格式
         str = str.replace('上午', 'AM').replace('下午', 'PM');
         const date = new Date(str);
         return isNaN(date.getTime()) ? null : date;
@@ -97,20 +107,20 @@
     fetch(url)
       .then(res => res.text())
       .then(text => {
-        console.log('Raw JSON:', text.substring(0, 500) + '...'); // 輸出部分原始 JSON（避免過長）
+        console.log('Raw JSON:', text.substring(0, 500) + '...'); // 輸出部分 JSON
         const json = JSON.parse(text.substring(47).slice(0, -2));
-        console.log('Parsed rows:', json.table.rows); // 輸出所有行數據
+        console.log('Parsed rows:', json.table.rows); // 輸出所有行
         const rows = json.table.rows.slice(1); // 跳過標題行
 
         allData = rows.map((row, index) => {
           const time = parseTime(row.c[0]?.v);
           const temp = parseFloat(row.c[1]?.v || 0);
           const hum = parseFloat(row.c[2]?.v || 0);
-          console.log(`Row ${index + 2}:`, { time: row.c[0]?.v, parsedTime: time, temp, hum }); // 每行日誌
+          console.log(`Row ${index + 2}:`, { time: row.c[0]?.v, parsedTime: time, temp, hum });
           return { time, temp, hum };
         }).filter(d => d.time && !isNaN(d.time.getTime()));
 
-        console.log('Filtered allData:', allData); // 輸出過濾後資料
+        console.log('Filtered allData:', allData);
 
         if (allData.length === 0) {
           document.getElementById('errorMessage').innerText = '無有效資料可顯示';
@@ -170,7 +180,7 @@
       const temps = filtered.map(d => d.temp);
       const hums = filtered.map(d => d.hum);
 
-      console.log('Chart data:', { labels, temps, hums }); // 圖表數據日誌
+      console.log('Chart data:', { labels, temps, hums });
 
       // 繪製圖表
       if (chart) chart.destroy();
