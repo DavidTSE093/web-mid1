@@ -272,65 +272,57 @@
       let temps = [];
       let hums = [];
       let titleText = '溫濕度變化';
+      let xAxisUnit = '';
 
+      // 篩選資料並生成標籤
       if (range === '1h') {
-        // 最近 1 小時：分鐘為單位
+        // 最近 1 小時：分鐘標籤
         const from = new Date(maxTime.getTime() - 60 * 60 * 1000);
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
         titleText = '溫濕度變化（最近 1 小時）';
+        xAxisUnit = '分鐘';
 
-        // 生成 0-60 分鐘標籤
+        // 生成分鐘標籤（0-60）
         for (let i = 0; i <= 60; i++) {
           labels.push(i.toString());
-          const minuteStart = new Date(maxTime.getTime() - (60 - i) * 60 * 1000);
-          const minuteEnd = new Date(minuteStart.getTime() + 60 * 1000);
-          const dataPoint = filtered
-            .filter(d => d.time >= minuteStart && d.time < minuteEnd)
-            .sort((a, b) => b.time - a.time)[0]; // 取最新一筆
-          temps.push(dataPoint ? dataPoint.temp : null);
-          hums.push(dataPoint ? dataPoint.hum : null);
         }
+
+        // 資料按原始時間
+        temps = filtered.map(d => d.temp);
+        hums = filtered.map(d => d.hum);
       } else if (range === '1d') {
-        // 最近 1 天：小時為單位
+        // 最近 1 天：小時標籤
         const from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000);
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
         titleText = '溫濕度變化（最近 1 天）';
+        xAxisUnit = '小時';
 
-        // 生成 0-23 小時標籤
+        // 生成小時標籤（0-23）
         for (let i = 0; i < 24; i++) {
           labels.push(i.toString());
-          const hourStart = new Date(maxTime.getTime() - (23 - i) * 60 * 60 * 1000);
-          const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
-          const dataPoint = filtered
-            .filter(d => d.time >= hourStart && d.time < hourEnd)
-            .sort((a, b) => b.time - a.time)[0];
-          temps.push(dataPoint ? dataPoint.temp : null);
-          hums.push(dataPoint ? dataPoint.hum : null);
         }
+
+        temps = filtered.map(d => d.temp);
+        hums = filtered.map(d => d.hum);
       } else if (range === '1w') {
-        // 最近 1 週：天為單位（週一至週日）
+        // 最近 1 週：星期標籤
         const from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000);
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
         titleText = '溫濕度變化（最近 1 週）';
+        xAxisUnit = '星期';
 
         // 生成週一至週日標籤
         const days = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
-        const weekStart = new Date(maxTime);
-        weekStart.setDate(maxTime.getDate() - (maxTime.getDay() || 7) + 1); // 調整到週一
-        for (let i = 0; i < 7; i++) {
-          const dayStart = new Date(weekStart.getTime() + i * 24 * 60 * 60 * 1000);
-          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-          labels.push(days[i]);
-          const dataPoint = filtered
-            .filter(d => d.time >= dayStart && d.time < dayEnd)
-            .sort((a, b) => b.time - a.time)[0];
-          temps.push(dataPoint ? dataPoint.temp : null);
-          hums.push(dataPoint ? dataPoint.hum : null);
-        }
+        labels = days.slice(0, 7);
+
+        temps = filtered.map(d => d.temp);
+        hums = filtered.map(d => d.hum);
       } else {
         // 全部資料：按天
         filtered = allData.slice().sort((a, b) => a.time - b.time);
         titleText = '溫濕度變化（全部資料）';
+        xAxisUnit = '日期';
+
         if (filtered.length === 0) {
           document.getElementById('errorMessage').innerText = '無有效資料可顯示';
           document.getElementById('errorMessage').style.display = 'block';
@@ -342,23 +334,22 @@
         const maxTime = new Date(Math.max(...filtered.map(d => d.time)));
         const daysDiff = Math.ceil((maxTime - minTime) / (24 * 60 * 60 * 1000));
         for (let i = 0; i <= daysDiff; i++) {
-          const dayStart = new Date(minTime.getTime() + i * 24 * 60 * 60 * 1000);
-          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-          const dateStr = `${dayStart.getMonth() + 1}/${dayStart.getDate()}`;
-          labels.push(dateStr);
-          const dataPoint = filtered
-            .filter(d => d.time >= dayStart && d.time < dayEnd)
-            .sort((a, b) => b.time - a.time)[0];
-          temps.push(dataPoint ? dataPoint.temp : null);
-          hums.push(dataPoint ? dataPoint.hum : null);
+          const day = new Date(minTime.getTime() + i * 24 * 60 * 60 * 1000);
+          labels.push(`${day.getMonth() + 1}/${day.getDate()}`);
         }
+
+        temps = filtered.map(d => d.temp);
+        hums = filtered.map(d => d.hum);
       }
 
-      if (labels.length === 0) {
+      if (filtered.length === 0) {
         document.getElementById('errorMessage').innerText = '無有效資料可顯示';
         document.getElementById('errorMessage').style.display = 'block';
         return;
       }
+
+      // 按時間排序
+      filtered.sort((a, b) => a.time - b.time);
 
       console.log('Chart data:', { labels, temps, hums });
 
@@ -377,9 +368,9 @@
               borderWidth: 2,
               pointRadius: 4,
               pointHoverRadius: 6,
-              tension: 0,
+              tension: 0.2,
               fill: false,
-              spanGaps: false
+              spanGaps: true
             },
             {
               label: '濕度 (%)',
@@ -389,9 +380,9 @@
               borderWidth: 2,
               pointRadius: 4,
               pointHoverRadius: 6,
-              tension: 0,
+              tension: 0.2,
               fill: false,
-              spanGaps: false
+              spanGaps: true
             }
           ]
         },
@@ -414,14 +405,17 @@
             x: {
               title: {
                 display: true,
-                text: range === '1h' ? '分鐘' : range === '1d' ? '小時' : range === '1w' ? '星期' : '日期'
+                text: xAxisUnit
               },
               ticks: {
                 maxRotation: 90,
                 minRotation: 45,
-                autoSkip: range !== '1h', // 1 小時顯示所有分鐘
-                maxTicksLimit: range === '1h' ? 60 : range === '1d' ? 24 : range === '1w' ? 7 : 20,
-                font: { size: 12 }
+                autoSkip: range !== '1h' && range !== '1d' && range !== '1w',
+                maxTicksLimit: range === '1h' ? 61 : range === '1d' ? 24 : range === '1w' ? 7 : 20,
+                font: { size: 12 },
+                callback: function(value, index, values) {
+                  return labels[index]; // 直接使用自訂標籤
+                }
               },
               grid: { display: false }
             },
