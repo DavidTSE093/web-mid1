@@ -411,12 +411,12 @@
 
     // 地圖點擊與天氣資料
     const stationMap = {
-      'taipei': { name: '台北市', stationIds: ['C0A9F', '466920'] },
-      'newtaipei': { name: '新北市', stationIds: ['C0AH7', 'C0AH1'] },
-      'taoyuan': { name: '桃園市', stationIds: ['C0C48', 'C0C65'] },
-      'taichung': { name: '台中市', stationIds: ['C0F9L', 'C0F0I'] },
-      'tainan': { name: '台南市', stationIds: ['C0O90', 'C0O93'] },
-      'kaohsiung': { name: '高雄市', stationIds: ['C0R17', 'C0R14'] }
+      'taipei': { name: '台北市', stationIds: ['466920', 'C0A9F', '46692'] },
+      'newtaipei': { name: '新北市', stationIds: ['C0AH7', 'C0AH1', 'C0AH4'] },
+      'taoyuan': { name: '桃園市', stationIds: ['C0C48', 'C0C65', 'C0C70'] },
+      'taichung': { name: '台中市', stationIds: ['C0F9L', 'C0F0I', 'C0F9X'] },
+      'tainan': { name: '台南市', stationIds: ['C0O90', 'C0O93', 'C0O98'] },
+      'kaohsiung': { name: '高雄市', stationIds: ['C0R17', 'C0R14', 'C0R19'] }
     };
 
     let lastRequestTime = 0;
@@ -424,6 +424,7 @@
 
     function fetchWeatherData(stationIds, regionName, index = 0) {
       if (index >= stationIds.length) {
+        console.log(`All stations failed for ${regionName}`);
         document.getElementById('loading').style.display = 'none';
         document.getElementById('weatherInfo').innerHTML = `
           <h3>${regionName}</h3>
@@ -445,7 +446,7 @@
       document.getElementById('loading').style.display = 'block';
       const apiKey = 'CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB';
       const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationIds[index]}`;
-      console.log(`Sending request to: ${weatherUrl}`); // 記錄請求
+      console.log(`Sending request to: ${weatherUrl}`);
 
       fetch(weatherUrl)
         .then(res => {
@@ -455,6 +456,7 @@
         })
         .then(data => {
           console.log(`API response for ${stationIds[index]}:`, data);
+          console.log(`Records for ${stationIds[index]}:`, data?.records);
           document.getElementById('loading').style.display = 'none';
 
           if (!data || !data.success) {
@@ -466,15 +468,13 @@
           }
 
           if (!data.records) {
-            document.getElementById('weatherInfo').innerHTML = `
-              <h3>${regionName}</h3>
-              <p>⚠️ API 無記錄資料</p>
-            `;
+            console.log(`No records for ${stationIds[index]}, trying next...`);
+            fetchWeatherData(stationIds, regionName, index + 1);
             return;
           }
 
           if (!Array.isArray(data.records.station) || data.records.station.length === 0) {
-            console.log(`No data for station ${stationIds[index]}, trying next...`);
+            console.log(`No station data for ${stationIds[index]}, trying next...`);
             fetchWeatherData(stationIds, regionName, index + 1);
             return;
           }
@@ -507,6 +507,7 @@
         const regionId = path.id;
         const region = stationMap[regionId];
         if (region) {
+          console.log(`Fetching weather for ${region.name}, stations: ${region.stationIds}`);
           fetchWeatherData(region.stationIds, region.name);
         } else {
           document.getElementById('weatherInfo').innerHTML = `
