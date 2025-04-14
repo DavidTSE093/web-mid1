@@ -75,6 +75,7 @@
         const date = new Date(str);
         return isNaN(date.getTime()) ? null : date;
       } catch (e) {
+        console.warn('時間解析失敗:', str, e);
         return null;
       }
     }
@@ -96,15 +97,20 @@
     fetch(url)
       .then(res => res.text())
       .then(text => {
+        console.log('Raw JSON:', text.substring(0, 500) + '...'); // 輸出部分原始 JSON（避免過長）
         const json = JSON.parse(text.substring(47).slice(0, -2));
+        console.log('Parsed rows:', json.table.rows); // 輸出所有行數據
         const rows = json.table.rows.slice(1); // 跳過標題行
 
-        allData = rows.map(row => {
+        allData = rows.map((row, index) => {
           const time = parseTime(row.c[0]?.v);
           const temp = parseFloat(row.c[1]?.v || 0);
           const hum = parseFloat(row.c[2]?.v || 0);
+          console.log(`Row ${index + 2}:`, { time: row.c[0]?.v, parsedTime: time, temp, hum }); // 每行日誌
           return { time, temp, hum };
         }).filter(d => d.time && !isNaN(d.time.getTime()));
+
+        console.log('Filtered allData:', allData); // 輸出過濾後資料
 
         if (allData.length === 0) {
           document.getElementById('errorMessage').innerText = '無有效資料可顯示';
@@ -145,7 +151,7 @@
         }
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
 
-        if (filtered.length < 2 && range !== 'all') {
+        if (filtered.length < 2) {
           filtered = allData; // 回退顯示所有資料
           fallbackToAll = true;
           document.getElementById('errorMessage').innerText = `所選時間範圍（${range === '1h' ? '最近一小時' : range === '1d' ? '最近一天' : '最近一週'}）內資料不足，已顯示全部資料`;
@@ -163,6 +169,8 @@
       const labels = filtered.map(d => formatLabel(d.time));
       const temps = filtered.map(d => d.temp);
       const hums = filtered.map(d => d.hum);
+
+      console.log('Chart data:', { labels, temps, hums }); // 圖表數據日誌
 
       // 繪製圖表
       if (chart) chart.destroy();
