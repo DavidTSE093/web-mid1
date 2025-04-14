@@ -209,6 +209,12 @@
       }
     }
 
+    // 格式化時間為 YYYY/MM/DD HH:mm:ss
+    function formatTooltipTime(date) {
+      return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')} ` +
+             `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+    }
+
     let allData = [];
     let chart = null;
 
@@ -271,6 +277,7 @@
       let labels = [];
       let temps = [];
       let hums = [];
+      let times = [];
       let titleText = '溫濕度變化';
       let xAxisUnit = '';
 
@@ -286,10 +293,6 @@
         for (let i = 0; i <= 60; i++) {
           labels.push(i.toString());
         }
-
-        // 資料按原始時間
-        temps = filtered.map(d => d.temp);
-        hums = filtered.map(d => d.hum);
       } else if (range === '1d') {
         // 最近 1 天：小時標籤
         const from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000);
@@ -301,9 +304,6 @@
         for (let i = 0; i < 24; i++) {
           labels.push(i.toString());
         }
-
-        temps = filtered.map(d => d.temp);
-        hums = filtered.map(d => d.hum);
       } else if (range === '1w') {
         // 最近 1 週：星期標籤
         const from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -314,9 +314,6 @@
         // 生成週一至週日標籤
         const days = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
         labels = days.slice(0, 7);
-
-        temps = filtered.map(d => d.temp);
-        hums = filtered.map(d => d.hum);
       } else {
         // 全部資料：按天
         filtered = allData.slice().sort((a, b) => a.time - b.time);
@@ -337,9 +334,6 @@
           const day = new Date(minTime.getTime() + i * 24 * 60 * 60 * 1000);
           labels.push(`${day.getMonth() + 1}/${day.getDate()}`);
         }
-
-        temps = filtered.map(d => d.temp);
-        hums = filtered.map(d => d.hum);
       }
 
       if (filtered.length === 0) {
@@ -348,10 +342,13 @@
         return;
       }
 
-      // 按時間排序
+      // 按時間排序並提取資料
       filtered.sort((a, b) => a.time - b.time);
+      temps = filtered.map(d => d.temp);
+      hums = filtered.map(d => d.hum);
+      times = filtered.map(d => d.time);
 
-      console.log('Chart data:', { labels, temps, hums });
+      console.log('Chart data:', { labels, temps, hums, times });
 
       if (chart) chart.destroy();
       const ctx = document.getElementById('lineChart').getContext('2d');
@@ -398,7 +395,18 @@
             tooltip: {
               enabled: true,
               mode: 'index',
-              intersect: false
+              intersect: false,
+              callbacks: {
+                title: function(tooltipItems) {
+                  const index = tooltipItems[0].dataIndex;
+                  return `時間: ${formatTooltipTime(times[index])}`;
+                },
+                label: function(context) {
+                  const datasetLabel = context.dataset.label;
+                  const value = context.raw;
+                  return `${datasetLabel}: ${value != null ? value + (datasetLabel.includes('溫度') ? '°C' : '%') : 'N/A'}`;
+                }
+              }
             }
           },
           scales: {
@@ -414,7 +422,7 @@
                 maxTicksLimit: range === '1h' ? 61 : range === '1d' ? 24 : range === '1w' ? 7 : 20,
                 font: { size: 12 },
                 callback: function(value, index, values) {
-                  return labels[index]; // 直接使用自訂標籤
+                  return labels[index];
                 }
               },
               grid: { display: false }
