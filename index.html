@@ -13,10 +13,11 @@
     }
     h1 {
       margin-bottom: 10px;
+      color: #333;
     }
     #currentTime {
       font-size: 18px;
-      color: #333;
+      color: #555;
       margin-bottom: 20px;
     }
     .buttons {
@@ -24,23 +25,67 @@
     }
     .buttons button {
       margin: 0 5px;
-      padding: 8px 12px;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
       cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .buttons button:hover {
+      background-color: #0056b3;
+    }
+    #refreshButton {
+      background-color: #28a745;
+    }
+    #refreshButton:hover {
+      background-color: #218838;
     }
     canvas {
       max-width: 100%;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     #errorMessage {
-      color: red;
+      color: white;
       font-size: 16px;
       margin-top: 10px;
+      padding: 10px;
+      background-color: #dc3545;
+      border-radius: 5px;
       display: none;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #loading {
+      display: none;
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 15px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #ccc;
+      border-top: 3px solid #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
   </style>
 </head>
 <body>
   <h1>溫度與濕度變化趨勢圖</h1>
   <div id="currentTime">現在時間：--:--:--</div>
+  <div id="loading"><span class="spinner"></span>載入資料中...</div>
   <div id="errorMessage"></div>
 
   <div class="buttons">
@@ -48,6 +93,7 @@
     <button onclick="updateChart('1d')">最近 1 天</button>
     <button onclick="updateChart('1w')">最近 1 週</button>
     <button onclick="updateChart('all')">全部資料</button>
+    <button id="refreshButton" onclick="fetchData()">重新整理</button>
   </div>
 
   <canvas id="lineChart"></canvas>
@@ -76,7 +122,6 @@
           const matches = str.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
           if (matches) {
             const [, year, month, day, hour, minute, second] = matches;
-            // 月份從 0 開始，需減 1
             return new Date(parseInt(year), parseInt(month), parseInt(day), parseInt(hour), parseInt(minute), parseInt(second));
           }
         }
@@ -103,42 +148,54 @@
     const sheetName = '表單回應 1';
     const url = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
 
-    // 載入 Google Sheets 資料
-    fetch(url)
-      .then(res => res.text())
-      .then(text => {
-        console.log('Raw JSON:', text.substring(0, 500) + '...'); // 輸出部分 JSON
-        const json = JSON.parse(text.substring(47).slice(0, -2));
-        console.log('Parsed rows:', json.table.rows); // 輸出所有行
-        const rows = json.table.rows.slice(1); // 跳過標題行
+    // 載入資料函數
+    function fetchData() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('errorMessage').style.display = 'none';
+      if (chart) chart.destroy();
+      chart = null;
 
-        allData = rows.map((row, index) => {
-          const time = parseTime(row.c[0]?.v);
-          const temp = parseFloat(row.c[1]?.v || 0);
-          const hum = parseFloat(row.c[2]?.v || 0);
-          console.log(`Row ${index + 2}:`, { time: row.c[0]?.v, parsedTime: time, temp, hum });
-          return { time, temp, hum };
-        }).filter(d => d.time && !isNaN(d.time.getTime()));
+      fetch(url)
+        .then(res => res.text())
+        .then(text => {
+          console.log('Raw JSON:', text.substring(0, 500) + '...');
+          const json = JSON.parse(text.substring(47).slice(0, -2));
+          console.log('Parsed rows:', json.table.rows);
+          const rows = json.table.rows.slice(1); // 跳過標題行
 
-        console.log('Filtered allData:', allData);
+          allData = rows.map((row, index) => {
+            const time = parseTime(row.c[0]?.v);
+            const temp = parseFloat(row.c[1]?.v || 0);
+            const hum = parseFloat(row.c[2]?.v || 0);
+            console.log(`Row ${index + 2}:`, { time: row.c[0]?.v, parsedTime: time, temp, hum });
+            return { time, temp, hum };
+          }).filter(d => d.time && !isNaN(d.time.getTime()));
 
-        if (allData.length === 0) {
-          document.getElementById('errorMessage').innerText = '無有效資料可顯示';
+          console.log('Filtered allData:', allData);
+          document.getElementById('loading').style.display = 'none';
+
+          if (allData.length === 0) {
+            document.getElementById('errorMessage').innerText = '無有效資料可顯示';
+            document.getElementById('errorMessage').style.display = 'block';
+            return;
+          }
+
+          updateChart('all'); // 預設顯示全部資料
+        })
+        .catch(error => {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('errorMessage').innerText = '⚠️ 資料載入失敗，請檢查 Google Sheets 權限';
           document.getElementById('errorMessage').style.display = 'block';
-          return;
-        }
+          console.error('資料讀取錯誤:', error);
+        });
+    }
 
-        updateChart('all'); // 預設顯示全部資料
-      })
-      .catch(error => {
-        document.getElementById('errorMessage').innerText = '⚠️ 資料載入失敗，請檢查 Google Sheets 權限';
-        document.getElementById('errorMessage').style.display = 'block';
-        console.error('資料讀取錯誤:', error);
-      });
+    // 初始載入資料
+    fetchData();
 
     // 更新圖表
     function updateChart(range) {
-      document.getElementById('errorMessage').style.display = 'none'; // 重置錯誤訊息
+      document.getElementById('errorMessage').style.display = 'none';
 
       // 計算時間範圍
       const minTime = allData.length > 0 ? new Date(Math.min(...allData.map(d => d.time))) : new Date();
@@ -162,7 +219,7 @@
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
 
         if (filtered.length < 2) {
-          filtered = allData; // 回退顯示所有資料
+          filtered = allData;
           fallbackToAll = true;
           document.getElementById('errorMessage').innerText = `所選時間範圍（${range === '1h' ? '最近一小時' : range === '1d' ? '最近一天' : '最近一週'}）內資料不足，已顯示全部資料`;
           document.getElementById('errorMessage').style.display = 'block';
@@ -176,9 +233,41 @@
         return;
       }
 
-      const labels = filtered.map(d => formatLabel(d.time));
-      const temps = filtered.map(d => d.temp);
-      const hums = filtered.map(d => d.hum);
+      // 排序資料按時間
+      filtered.sort((a, b) => a.time - b.time);
+
+      // 處理「最近一天」的中斷
+      const labels = [];
+      const temps = [];
+      const hums = [];
+      const gapThreshold = 5 * 60 * 1000; // 5 分鐘閾值
+
+      if (range === '1d') {
+        for (let i = 0; i < filtered.length; i++) {
+          labels.push(formatLabel(filtered[i].time));
+          temps.push(filtered[i].temp);
+          hums.push(filtered[i].hum);
+
+          // 檢查下一個點是否中斷
+          if (i < filtered.length - 1) {
+            const currentTime = filtered[i].time.getTime();
+            const nextTime = filtered[i + 1].time.getTime();
+            if (nextTime - currentTime > gapThreshold) {
+              // 插入空白點
+              labels.push(formatLabel(new Date(currentTime + gapThreshold / 2)));
+              temps.push(null);
+              hums.push(null);
+            }
+          }
+        }
+      } else {
+        // 其他範圍保持連續
+        filtered.forEach(d => {
+          labels.push(formatLabel(d.time));
+          temps.push(d.temp);
+          hums.push(d.hum);
+        });
+      }
 
       console.log('Chart data:', { labels, temps, hums });
 
@@ -194,15 +283,25 @@
               label: '溫度 (°C)',
               data: temps,
               borderColor: 'rgb(255, 99, 132)',
+              backgroundColor: 'rgba(255, 99, 132, 0.1)',
+              borderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6,
               tension: 0.2,
-              fill: false
+              fill: false,
+              spanGaps: false
             },
             {
               label: '濕度 (%)',
               data: hums,
               borderColor: 'rgb(54, 162, 235)',
+              backgroundColor: 'rgba(54, 162, 235, 0.1)',
+              borderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 6,
               tension: 0.2,
-              fill: false
+              fill: false,
+              spanGaps: false
             }
           ]
         },
@@ -212,7 +311,13 @@
             legend: { position: 'top' },
             title: {
               display: true,
-              text: titleText
+              text: titleText,
+              font: { size: 18 }
+            },
+            tooltip: {
+              enabled: true,
+              mode: 'index',
+              intersect: false
             }
           },
           scales: {
@@ -220,10 +325,19 @@
               ticks: {
                 maxRotation: 90,
                 minRotation: 45,
-                autoSkip: filtered.length > 10, // 少量資料時顯示所有標籤
-                maxTicksLimit: 10
-              }
+                autoSkip: filtered.length > 20,
+                maxTicksLimit: Math.min(20, filtered.length),
+                font: { size: 12 }
+              },
+              grid: { display: false }
+            },
+            y: {
+              beginAtZero: false,
+              grid: { color: '#e0e0e0' }
             }
+          },
+          animation: {
+            duration: 1000
           }
         }
       });
