@@ -310,21 +310,21 @@
 
       const labels = [];
       const temps = [];
-      const humns = [];
+      const hums = [];
       const gapThreshold = 5 * 60 * 1000;
 
       if (range === '1d') {
         for (let i = 0; i < filtered.length; i++) {
           labels.push(formatLabel(filtered[i].time));
           temps.push(filtered[i].temp);
-          humns.push(filtered[i].hum);
+          hums.push(filtered[i].hum);
           if (i < filtered.length - 1) {
             const currentTime = filtered[i].time.getTime();
             const nextTime = filtered[i + 1].time.getTime();
             if (nextTime - currentTime > gapThreshold) {
               labels.push(formatLabel(new Date(currentTime + gapThreshold / 2)));
               temps.push(null);
-              humns.push(null);
+              hums.push(null);
             }
           }
         }
@@ -332,11 +332,11 @@
         filtered.forEach(d => {
           labels.push(formatLabel(d.time));
           temps.push(d.temp);
-          humns.push(d.hum);
+          hums.push(d.hum);
         });
       }
 
-      console.log('Chart data:', { labels, temps, humns });
+      console.log('Chart data:', { labels, temps, hums });
 
       if (chart) chart.destroy();
       const ctx = document.getElementById('lineChart').getContext('2d');
@@ -359,7 +359,7 @@
             },
             {
               label: '濕度 (%)',
-              data: humns,
+              data: hums,
               borderColor: 'rgb(54, 162, 235)',
               backgroundColor: 'rgba(54, 162, 235, 0.1)',
               borderWidth: 2,
@@ -420,7 +420,7 @@
     };
 
     let lastRequestTime = 0;
-    const requestCooldown = 2000; // 2 秒冷卻
+    const requestCooldown = 1000; // 1 秒冷卻
 
     function fetchWeatherData(stationIds, regionName, index = 0) {
       if (index >= stationIds.length) {
@@ -436,7 +436,7 @@
       if (now - lastRequestTime < requestCooldown) {
         document.getElementById('weatherInfo').innerHTML = `
           <h3>${regionName}</h3>
-          <p>請稍後再試（請求過於頻繁）</p>
+          <p>請稍後再試（1 秒後重試）</p>
         `;
         return;
       }
@@ -445,9 +445,11 @@
       document.getElementById('loading').style.display = 'block';
       const apiKey = 'CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB';
       const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationIds[index]}`;
+      console.log(`Sending request to: ${weatherUrl}`); // 記錄請求
 
       fetch(weatherUrl)
         .then(res => {
+          console.log(`Response status for ${stationIds[index]}: ${res.status}`);
           if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
           return res.json();
         })
@@ -473,7 +475,7 @@
 
           if (!Array.isArray(data.records.station) || data.records.station.length === 0) {
             console.log(`No data for station ${stationIds[index]}, trying next...`);
-            fetchWeatherData(stationIds, regionName, index + 1); // 嘗試下一個站點
+            fetchWeatherData(stationIds, regionName, index + 1);
             return;
           }
 
@@ -491,7 +493,7 @@
         .catch(error => {
           console.error(`Error for station ${stationIds[index]}:`, error);
           document.getElementById('loading').style.display = 'none';
-          fetchWeatherData(stationIds, regionName, index + 1); // 嘗試下一個站點
+          fetchWeatherData(stationIds, regionName, index + 1);
         });
     }
 
