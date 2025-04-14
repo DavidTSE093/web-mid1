@@ -116,10 +116,15 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       text-align: left;
       font-size: 16px;
+      opacity: 0;
+      animation: fadeIn 0.5s forwards;
     }
     #weatherInfo h3 {
       margin: 0 0 10px;
       color: #333;
+    }
+    @keyframes fadeIn {
+      to { opacity: 1; }
     }
     @media (max-width: 600px) {
       #mapContainer {
@@ -156,7 +161,6 @@
 
   <div id="mapContainer">
     <svg id="taiwanMap" viewBox="0 0 200 300">
-      <!-- 簡化版台灣 SVG，僅包含主要縣市 -->
       <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="台北市"/>
       <path id="newtaipei" d="M80,50 L100,50 L110,60 L100,70 L70,70 Z" title="新北市"/>
       <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="桃園市"/>
@@ -205,7 +209,7 @@
       }
     }
 
-    // 格式化 X  éléments
+    // 格式化 X 軸標籤
     function formatLabel(date) {
       return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
     }
@@ -415,28 +419,46 @@
       'kaohsiung': { name: '高雄市', stationId: 'C0R17' }
     };
 
+    let lastRequestTime = 0;
+    const requestCooldown = 5000; // 5 秒冷卻
+
     function fetchWeatherData(stationId, regionName) {
+      const now = Date.now();
+      if (now - lastRequestTime < requestCooldown) {
+        document.getElementById('weatherInfo').innerHTML = `
+          <h3>${regionName}</h3>
+          <p>請稍後再試（請求過於頻繁）</p>
+        `;
+        return;
+      }
+      lastRequestTime = now;
+
       document.getElementById('loading').style.display = 'block';
-      const apiKey = '{CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB}'; // 請替換為您的 CWA API 金鑰
+      const apiKey = 'CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB';
       const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationId}`;
 
       fetch(weatherUrl)
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
+          return res.json();
+        })
         .then(data => {
           document.getElementById('loading').style.display = 'none';
-          const observation = data.records.station[0]?.obsTime?.weatherElement;
-          if (observation) {
-            const temp = observation.find(el => el.elementName === 'TEMP')?.elementValue || 'N/A';
-            const weather = observation.find(el => el.elementName === 'Weather')?.elementValue || 'N/A';
+          const station = data.records.station[0];
+          if (station?.weatherElement) {
+            const temp = station.weatherElement.find(el => el.elementName === 'TEMP')?.elementValue || 'N/A';
+            const weather = station.weatherElement.find(el => el.elementName === 'Weather')?.elementValue || 'N/A';
+            const obsTime = station.obsTime?.time || 'N/A';
             document.getElementById('weatherInfo').innerHTML = `
               <h3>${regionName}</h3>
-              <p>溫度：${temp}°C</p>
+              <p>溫度：${temp !== 'N/A' ? temp + '°C' : '無資料'}</p>
               <p>天氣：${weather}</p>
+              <p>觀測時間：${obsTime}</p>
             `;
           } else {
             document.getElementById('weatherInfo').innerHTML = `
               <h3>${regionName}</h3>
-              <p>無法獲取天氣資料</p>
+              <p>無即時觀測資料</p>
             `;
           }
         })
@@ -444,7 +466,7 @@
           document.getElementById('loading').style.display = 'none';
           document.getElementById('weatherInfo').innerHTML = `
             <h3>${regionName}</h3>
-            <p>⚠️ 資料載入失敗，請檢查 API 金鑰或網路</p>
+            <p>⚠️ 資料載入失敗：${error.message}</p>
           `;
           console.error('天氣資料錯誤:', error);
         });
@@ -454,7 +476,6 @@
     const paths = document.querySelectorAll('#taiwanMap path');
     paths.forEach(path => {
       path.addEventListener('click', () => {
-        // 重置選中樣式
         paths.forEach(p => p.classList.remove('selected'));
         path.classList.add('selected');
 
