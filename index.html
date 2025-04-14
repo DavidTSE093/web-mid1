@@ -42,6 +42,21 @@
     #refreshButton:hover {
       background-color: #218838;
     }
+    #weatherMode {
+      margin: 10px 0;
+    }
+    #weatherMode button {
+      padding: 8px 12px;
+      margin: 0 5px;
+      border: none;
+      border-radius: 5px;
+      background-color: #6c757d;
+      color: white;
+      cursor: pointer;
+    }
+    #weatherMode button.active {
+      background-color: #007bff;
+    }
     canvas {
       max-width: 100%;
       background-color: #fff;
@@ -159,13 +174,18 @@
 
   <canvas id="lineChart"></canvas>
 
+  <div id="weatherMode">
+    <button id="realtimeBtn" class="active" onclick="setWeatherMode('realtime')">即時天氣</button>
+    <button id="forecastBtn" onclick="setWeatherMode('forecast')">36 小時預報</button>
+  </div>
+
   <div id="mapContainer">
     <svg id="taiwanMap" viewBox="0 0 200 300">
-      <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="台北市"/>
+      <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="臺北市"/>
       <path id="newtaipei" d="M80,50 L100,50 L110,60 L100,70 L70,70 Z" title="新北市"/>
       <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="桃園市"/>
-      <path id="taichung" d="M60,90 L100,90 L100,130 L50,130 Z" title="台中市"/>
-      <path id="tainan" d="M50,130 L100,130 L100,170 L40,170 Z" title="台南市"/>
+      <path id="taichung" d="M60,90 L100,90 L100,130 L50,130 Z" title="臺中市"/>
+      <path id="tainan" d="M50,130 L100,130 L100,170 L40,170 Z" title="臺南市"/>
       <path id="kaohsiung" d="M40,170 L100,170 L100,210 L30,210 Z" title="高雄市"/>
     </svg>
     <div id="weatherInfo">
@@ -409,20 +429,34 @@
       });
     }
 
-    // 地圖點擊與天氣資料
+    // 天氣模式切換
+    let weatherMode = 'realtime'; // 預設即時天氣
+    function setWeatherMode(mode) {
+      weatherMode = mode;
+      document.getElementById('realtimeBtn').classList.toggle('active', mode === 'realtime');
+      document.getElementById('forecastBtn').classList.toggle('active', mode === 'forecast');
+      document.getElementById('weatherInfo').innerHTML = `
+        <h3>天氣資訊</h3>
+        <p>請點擊地圖上的地區以查看${mode === 'realtime' ? '即時天氣' : '36 小時預報'}</p>
+      `;
+    }
+
+    // 地圖與天氣資料
     const stationMap = {
-      'taipei': { name: '台北市', stationIds: ['466920', 'C0A9F', '466910'] },
+      'taipei': { name: '臺北市', stationIds: ['466910', 'C0A9F', '466920'] },
       'newtaipei': { name: '新北市', stationIds: ['C0AH7', 'C0AH1', 'C0AH4'] },
       'taoyuan': { name: '桃園市', stationIds: ['C0C48', 'C0C65', 'C0C70'] },
-      'taichung': { name: '台中市', stationIds: ['C0F9L', 'C0F0I', 'C0F9X'] },
-      'tainan': { name: '台南市', stationIds: ['C0O90', 'C0O93', 'C0O98'] },
+      'taichung': { name: '臺中市', stationIds: ['C0F9L', 'C0F0I', 'C0F9X'] },
+      'tainan': { name: '臺南市', stationIds: ['C0O90', 'C0O93', 'C0O98'] },
       'kaohsiung': { name: '高雄市', stationIds: ['C0R17', 'C0R14', 'C0R19'] }
     };
 
     let lastRequestTime = 0;
     const requestCooldown = 1000; // 1 秒冷卻
+    const apiKey = 'CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB';
 
-    function fetchWeatherData(stationIds, regionName, index = 0) {
+    // 即時天氣
+    function fetchRealtimeWeather(stationIds, regionName, index = 0) {
       if (index >= stationIds.length) {
         console.log(`All stations failed for ${regionName}`);
         document.getElementById('loading').style.display = 'none';
@@ -444,7 +478,6 @@
       lastRequestTime = now;
 
       document.getElementById('loading').style.display = 'block';
-      const apiKey = 'CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB';
       const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationIds[index]}`;
       console.log(`Sending request to: ${weatherUrl}`);
 
@@ -470,22 +503,19 @@
 
           if (!data.records) {
             console.log(`No records for ${stationIds[index]}, trying next...`);
-            fetchWeatherData(stationIds, regionName, index + 1);
+            fetchRealtimeWeather(stationIds, regionName, index + 1);
             return;
           }
 
-          // 適應 Station 或 station
           let stationData = data.records.Station || data.records.station || [];
           if (!Array.isArray(stationData)) {
             console.log(`Invalid station data for ${stationIds[index]}, trying next...`);
-            fetchWeatherData(stationIds, regionName, index + 1);
+            fetchRealtimeWeather(stationIds, regionName, index + 1);
             return;
           }
 
-          // 記錄前 5 個 stationId
           console.log(`Sample station IDs for ${stationIds[index]}:`, stationData.slice(0, 5).map(s => s.stationId));
 
-          // 靈活過濾站點
           const station = stationData.find(s => {
             const id = s.stationId?.toString().trim();
             const targetId = stationIds[index].toString().trim();
@@ -494,13 +524,12 @@
 
           if (!station) {
             console.log(`No matching station ${stationIds[index]} in data, trying next...`);
-            fetchWeatherData(stationIds, regionName, index + 1);
+            fetchRealtimeWeather(stationIds, regionName, index + 1);
             return;
           }
 
           console.log(`Found station ${stationIds[index]}:`, station);
 
-          // 解析 WeatherElement 物件
           const weatherElement = station.WeatherElement || {};
           const temp = weatherElement.AirTemperature ?? 'N/A';
           const weather = weatherElement.Weather ?? 'N/A';
@@ -508,7 +537,7 @@
           const obsTime = station.ObsTime?.DateTime || 'N/A';
 
           document.getElementById('weatherInfo').innerHTML = `
-            <h3>${regionName}</h3>
+            <h3>${regionName}（即時天氣）</h3>
             <p>溫度：${temp !== 'N/A' ? temp + '°C' : '無資料'}</p>
             <p>天氣：${weather}</p>
             <p>濕度：${humidity !== 'N/A' ? humidity + '%' : '無資料'}</p>
@@ -518,7 +547,93 @@
         .catch(error => {
           console.error(`Error for station ${stationIds[index]}:`, error);
           document.getElementById('loading').style.display = 'none';
-          fetchWeatherData(stationIds, regionName, index + 1);
+          fetchRealtimeWeather(stationIds, regionName, index + 1);
+        });
+    }
+
+    // 36 小時預報
+    function fetchForecastWeather(regionName) {
+      const now = Date.now();
+      if (now - lastRequestTime < requestCooldown) {
+        document.getElementById('weatherInfo').innerHTML = `
+          <h3>${regionName}</h3>
+          <p>請稍後再試（1 秒後重試）</p>
+        `;
+        return;
+      }
+      lastRequestTime = now;
+
+      document.getElementById('loading').style.display = 'block';
+      const forecastUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${apiKey}`;
+      console.log(`Sending forecast request to: ${forecastUrl}`);
+
+      fetch(forecastUrl)
+        .then(res => {
+          console.log(`Response status for forecast: ${res.status}`);
+          if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
+          return res.json();
+        })
+        .then(data => {
+          console.log(`Forecast API response:`, data);
+          document.getElementById('loading').style.display = 'none';
+
+          if (!data || !data.success || !data.records?.location) {
+            document.getElementById('weatherInfo').innerHTML = `
+              <h3>${regionName}</h3>
+              <p>⚠️ 無預報資料：API 回應無效</p>
+            `;
+            return;
+          }
+
+          const locations = data.records.location;
+          const city = locations.find(loc => loc.locationName === regionName);
+          if (!city) {
+            console.log(`No forecast data for ${regionName}`);
+            document.getElementById('weatherInfo').innerHTML = `
+              <h3>${regionName}</h3>
+              <p>⚠️ 無預報資料：找不到 ${regionName}</p>
+            `;
+            return;
+          }
+
+          console.log(`Found forecast for ${regionName}:`, city);
+
+          // 提取第一時段（0-12 小時）
+          const wx = city.weatherElement.find(el => el.elementName === 'Wx')?.time[0];
+          const pop = city.weatherElement.find(el => el.elementName === 'PoP')?.time[0];
+          const minT = city.weatherElement.find(el => el.elementName === 'MinT')?.time[0];
+          const maxT = city.weatherElement.find(el => el.elementName === 'MaxT')?.time[0];
+
+          if (!wx || !pop || !minT || !maxT) {
+            document.getElementById('weatherInfo').innerHTML = `
+              <h3>${regionName}</h3>
+              <p>⚠️ 無完整預報資料</p>
+            `;
+            return;
+          }
+
+          const weather = wx.parameter.parameterName || 'N/A';
+          const popValue = pop.parameter.parameterName || 'N/A';
+          const minTemp = minT.parameter.parameterName || 'N/A';
+          const maxTemp = maxT.parameter.parameterName || 'N/A';
+          const startTime = wx.startTime || 'N/A';
+          const endTime = wx.endTime || 'N/A';
+
+          document.getElementById('weatherInfo').innerHTML = `
+            <h3>${regionName}（36 小時預報）</h3>
+            <p>天氣：${weather}</p>
+            <p>溫度：${minTemp !== 'N/A' && maxTemp !== 'N/A' ? `${minTemp}-${maxTemp}°C` : '無資料'}</p>
+            <p>降雨機率：${popValue !== 'N/A' ? popValue + '%' : '無資料'}</p>
+            <p>預報時段：${startTime} - ${endTime}</p>
+          `;
+        })
+        .catch(error => {
+          console.error(`Forecast error for ${regionName}:`, error);
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('weatherInfo').innerHTML = `
+            <h3>${regionName}</h3>
+            <p>⚠️ 無法載入預報資料：${error.message}</p>
+          `;
         });
     }
 
@@ -532,8 +647,12 @@
         const regionId = path.id;
         const region = stationMap[regionId];
         if (region) {
-          console.log(`Fetching weather for ${region.name}, stations: ${region.stationIds}`);
-          fetchWeatherData(region.stationIds, region.name);
+          console.log(`Fetching weather for ${region.name}, mode: ${weatherMode}`);
+          if (weatherMode === 'realtime') {
+            fetchRealtimeWeather(region.stationIds, region.name);
+          } else {
+            fetchForecastWeather(region.name);
+          }
         } else {
           document.getElementById('weatherInfo').innerHTML = `
             <h3>未知地區</h3>
