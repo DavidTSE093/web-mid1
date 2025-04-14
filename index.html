@@ -310,21 +310,21 @@
 
       const labels = [];
       const temps = [];
-      const hums = [];
+      const humns = [];
       const gapThreshold = 5 * 60 * 1000;
 
       if (range === '1d') {
         for (let i = 0; i < filtered.length; i++) {
           labels.push(formatLabel(filtered[i].time));
           temps.push(filtered[i].temp);
-          hums.push(filtered[i].hum);
+          humns.push(filtered[i].hum);
           if (i < filtered.length - 1) {
             const currentTime = filtered[i].time.getTime();
             const nextTime = filtered[i + 1].time.getTime();
             if (nextTime - currentTime > gapThreshold) {
               labels.push(formatLabel(new Date(currentTime + gapThreshold / 2)));
               temps.push(null);
-              hums.push(null);
+              humns.push(null);
             }
           }
         }
@@ -332,11 +332,11 @@
         filtered.forEach(d => {
           labels.push(formatLabel(d.time));
           temps.push(d.temp);
-          hums.push(d.hum);
+          humns.push(d.hum);
         });
       }
 
-      console.log('Chart data:', { labels, temps, hums });
+      console.log('Chart data:', { labels, temps, humns });
 
       if (chart) chart.destroy();
       const ctx = document.getElementById('lineChart').getContext('2d');
@@ -359,7 +359,7 @@
             },
             {
               label: '濕度 (%)',
-              data: hums,
+              data: humns,
               borderColor: 'rgb(54, 162, 235)',
               backgroundColor: 'rgba(54, 162, 235, 0.1)',
               borderWidth: 2,
@@ -411,18 +411,27 @@
 
     // 地圖點擊與天氣資料
     const stationMap = {
-      'taipei': { name: '台北市', stationId: 'C0A9F' },
-      'newtaipei': { name: '新北市', stationId: 'C0AH7' },
-      'taoyuan': { name: '桃園市', stationId: 'C0C48' },
-      'taichung': { name: '台中市', stationId: 'C0F9L' },
-      'tainan': { name: '台南市', stationId: 'C0O90' },
-      'kaohsiung': { name: '高雄市', stationId: 'C0R17' }
+      'taipei': { name: '台北市', stationIds: ['C0A9F', '466920'] },
+      'newtaipei': { name: '新北市', stationIds: ['C0AH7', 'C0AH1'] },
+      'taoyuan': { name: '桃園市', stationIds: ['C0C48', 'C0C65'] },
+      'taichung': { name: '台中市', stationIds: ['C0F9L', 'C0F0I'] },
+      'tainan': { name: '台南市', stationIds: ['C0O90', 'C0O93'] },
+      'kaohsiung': { name: '高雄市', stationIds: ['C0R17', 'C0R14'] }
     };
 
     let lastRequestTime = 0;
-    const requestCooldown = 5000; // 5 秒冷卻
+    const requestCooldown = 2000; // 2 秒冷卻
 
-    function fetchWeatherData(stationId, regionName) {
+    function fetchWeatherData(stationIds, regionName, index = 0) {
+      if (index >= stationIds.length) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('weatherInfo').innerHTML = `
+          <h3>${regionName}</h3>
+          <p>⚠️ 所有站點無資料，請稍後再試</p>
+        `;
+        return;
+      }
+
       const now = Date.now();
       if (now - lastRequestTime < requestCooldown) {
         document.getElementById('weatherInfo').innerHTML = `
@@ -435,7 +444,7 @@
 
       document.getElementById('loading').style.display = 'block';
       const apiKey = 'CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB';
-      const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationId}`;
+      const weatherUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001?Authorization=${apiKey}&stationId=${stationIds[index]}`;
 
       fetch(weatherUrl)
         .then(res => {
@@ -443,32 +452,46 @@
           return res.json();
         })
         .then(data => {
+          console.log(`API response for ${stationIds[index]}:`, data);
           document.getElementById('loading').style.display = 'none';
-          const station = data.records.station[0];
-          if (station?.weatherElement) {
-            const temp = station.weatherElement.find(el => el.elementName === 'TEMP')?.elementValue || 'N/A';
-            const weather = station.weatherElement.find(el => el.elementName === 'Weather')?.elementValue || 'N/A';
-            const obsTime = station.obsTime?.time || 'N/A';
+
+          if (!data || !data.success) {
             document.getElementById('weatherInfo').innerHTML = `
               <h3>${regionName}</h3>
-              <p>溫度：${temp !== 'N/A' ? temp + '°C' : '無資料'}</p>
-              <p>天氣：${weather}</p>
-              <p>觀測時間：${obsTime}</p>
+              <p>⚠️ API 回應無效：${data?.error || '未知錯誤'}</p>
             `;
-          } else {
-            document.getElementById('weatherInfo').innerHTML = `
-              <h3>${regionName}</h3>
-              <p>無即時觀測資料</p>
-            `;
+            return;
           }
-        })
-        .catch(error => {
-          document.getElementById('loading').style.display = 'none';
+
+          if (!data.records) {
+            document.getElementById('weatherInfo').innerHTML = `
+              <h3>${regionName}</h3>
+              <p>⚠️ API 無記錄資料</p>
+            `;
+            return;
+          }
+
+          if (!Array.isArray(data.records.station) || data.records.station.length === 0) {
+            console.log(`No data for station ${stationIds[index]}, trying next...`);
+            fetchWeatherData(stationIds, regionName, index + 1); // 嘗試下一個站點
+            return;
+          }
+
+          const station = data.records.station[0];
+          const temp = station.weatherElement?.find(el => el.elementName === 'TEMP')?.elementValue || 'N/A';
+          const weather = station.weatherElement?.find(el => el.elementName === 'Weather')?.elementValue || 'N/A';
+          const obsTime = station.obsTime?.time || 'N/A';
           document.getElementById('weatherInfo').innerHTML = `
             <h3>${regionName}</h3>
-            <p>⚠️ 資料載入失敗：${error.message}</p>
+            <p>溫度：${temp !== 'N/A' ? temp + '°C' : '無資料'}</p>
+            <p>天氣：${weather}</p>
+            <p>觀測時間：${obsTime}</p>
           `;
-          console.error('天氣資料錯誤:', error);
+        })
+        .catch(error => {
+          console.error(`Error for station ${stationIds[index]}:`, error);
+          document.getElementById('loading').style.display = 'none';
+          fetchWeatherData(stationIds, regionName, index + 1); // 嘗試下一個站點
         });
     }
 
@@ -482,7 +505,7 @@
         const regionId = path.id;
         const region = stationMap[regionId];
         if (region) {
-          fetchWeatherData(region.stationId, region.name);
+          fetchWeatherData(region.stationIds, region.name);
         } else {
           document.getElementById('weatherInfo').innerHTML = `
             <h3>未知地區</h3>
