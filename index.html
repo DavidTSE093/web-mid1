@@ -254,7 +254,7 @@
             return;
           }
 
-          updateChart('1w'); // 預設顯示一週，適應 1331 筆
+          updateChart('1w'); // 預設一週
         })
         .catch(error => {
           document.getElementById('loading').style.display = 'none';
@@ -411,7 +411,7 @@
 
     // 地圖點擊與天氣資料
     const stationMap = {
-      'taipei': { name: '台北市', stationIds: ['466920', 'C0A9F', '46692'] },
+      'taipei': { name: '台北市', stationIds: ['466920', 'C0A9F', '466910'] },
       'newtaipei': { name: '新北市', stationIds: ['C0AH7', 'C0AH1', 'C0AH4'] },
       'taoyuan': { name: '桃園市', stationIds: ['C0C48', 'C0C65', 'C0C70'] },
       'taichung': { name: '台中市', stationIds: ['C0F9L', 'C0F0I', 'C0F9X'] },
@@ -428,7 +428,7 @@
         document.getElementById('loading').style.display = 'none';
         document.getElementById('weatherInfo').innerHTML = `
           <h3>${regionName}</h3>
-          <p>⚠️ 無匹配站點資料，請稍後再試</p>
+          <p>⚠️ 無匹配站點資料（嘗試：${stationIds.join(', ')}）</p>
         `;
         return;
       }
@@ -482,8 +482,16 @@
             return;
           }
 
-          // 過濾指定站點
-          const station = stationData.find(s => s.stationId === stationIds[index]);
+          // 記錄前 5 個 stationId
+          console.log(`Sample station IDs for ${stationIds[index]}:`, stationData.slice(0, 5).map(s => s.stationId));
+
+          // 靈活過濾站點
+          const station = stationData.find(s => {
+            const id = s.stationId?.toString().trim();
+            const targetId = stationIds[index].toString().trim();
+            return id && targetId && id.toUpperCase() === targetId.toUpperCase();
+          });
+
           if (!station) {
             console.log(`No matching station ${stationIds[index]} in data, trying next...`);
             fetchWeatherData(stationIds, regionName, index + 1);
