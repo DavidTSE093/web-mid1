@@ -254,7 +254,7 @@
             return;
           }
 
-          updateChart('all');
+          updateChart('1w'); // 預設顯示一週，適應 1331 筆
         })
         .catch(error => {
           document.getElementById('loading').style.display = 'none';
@@ -274,7 +274,7 @@
       const minTime = allData.length > 0 ? new Date(Math.min(...allData.map(d => d.time))) : new Date();
       const maxTime = allData.length > 0 ? new Date(Math.max(...allData.map(d => d.time))) : new Date();
       let filtered = allData;
-      let titleText = '溫濕度變化（全部資料）';
+      let titleText = '溫濕度變化（最近一週）';
       let fallbackToAll = false;
 
       if (range !== 'all') {
@@ -391,8 +391,8 @@
               ticks: {
                 maxRotation: 90,
                 minRotation: 45,
-                autoSkip: filtered.length > 20,
-                maxTicksLimit: Math.min(20, filtered.length),
+                autoSkip: true,
+                maxTicksLimit: 20,
                 font: { size: 12 }
               },
               grid: { display: false }
@@ -428,7 +428,7 @@
         document.getElementById('loading').style.display = 'none';
         document.getElementById('weatherInfo').innerHTML = `
           <h3>${regionName}</h3>
-          <p>⚠️ 所有站點無資料，請稍後再試</p>
+          <p>⚠️ 無匹配站點資料，請稍後再試</p>
         `;
         return;
       }
@@ -456,6 +456,7 @@
         })
         .then(data => {
           console.log(`API response for ${stationIds[index]}:`, data);
+          console.log(`Records keys for ${stationIds[index]}:`, data?.records ? Object.keys(data.records) : null);
           console.log(`Records for ${stationIds[index]}:`, data?.records);
           document.getElementById('loading').style.display = 'none';
 
@@ -473,20 +474,36 @@
             return;
           }
 
-          if (!Array.isArray(data.records.station) || data.records.station.length === 0) {
-            console.log(`No station data for ${stationIds[index]}, trying next...`);
+          // 適應 Station 或 station
+          let stationData = data.records.Station || data.records.station || [];
+          if (!Array.isArray(stationData)) {
+            console.log(`Invalid station data for ${stationIds[index]}, trying next...`);
             fetchWeatherData(stationIds, regionName, index + 1);
             return;
           }
 
-          const station = data.records.station[0];
-          const temp = station.weatherElement?.find(el => el.elementName === 'TEMP')?.elementValue || 'N/A';
-          const weather = station.weatherElement?.find(el => el.elementName === 'Weather')?.elementValue || 'N/A';
-          const obsTime = station.obsTime?.time || 'N/A';
+          // 過濾指定站點
+          const station = stationData.find(s => s.stationId === stationIds[index]);
+          if (!station) {
+            console.log(`No matching station ${stationIds[index]} in data, trying next...`);
+            fetchWeatherData(stationIds, regionName, index + 1);
+            return;
+          }
+
+          console.log(`Found station ${stationIds[index]}:`, station);
+
+          // 解析 WeatherElement 物件
+          const weatherElement = station.WeatherElement || {};
+          const temp = weatherElement.AirTemperature ?? 'N/A';
+          const weather = weatherElement.Weather ?? 'N/A';
+          const humidity = weatherElement.RelativeHumidity ?? 'N/A';
+          const obsTime = station.ObsTime?.DateTime || 'N/A';
+
           document.getElementById('weatherInfo').innerHTML = `
             <h3>${regionName}</h3>
             <p>溫度：${temp !== 'N/A' ? temp + '°C' : '無資料'}</p>
             <p>天氣：${weather}</p>
+            <p>濕度：${humidity !== 'N/A' ? humidity + '%' : '無資料'}</p>
             <p>觀測時間：${obsTime}</p>
           `;
         })
