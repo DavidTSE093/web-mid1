@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>溫濕度趨勢圖與台灣天氣預報</title>
+  <title>溫濕度與車輛控制</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
@@ -19,6 +19,46 @@
       font-size: 18px;
       color: #555;
       margin-bottom: 20px;
+    }
+    #modeSelector {
+      margin-bottom: 20px;
+    }
+    #modeSelector select {
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+    }
+    #loading {
+      display: none;
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 15px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #ccc;
+      border-top: 3px solid #007bff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    #errorMessage {
+      color: white;
+      font-size: 16px;
+      margin: 10px auto;
+      padding: 10px;
+      background-color: #dc3545;
+      border-radius: 5px;
+      display: none;
+      max-width: 600px;
     }
     .buttons {
       margin-bottom: 15px;
@@ -49,15 +89,83 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       margin-bottom: 30px;
     }
-    #errorMessage {
-      color: white;
+    #mapContainer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: flex-start;
+      margin-top: 20px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    #taiwanMap {
+      width: 300px;
+      height: auto;
+    }
+    #taiwanMap path {
+      fill: #c0c0c0;
+      stroke: #333;
+      stroke-width: 1;
+      cursor: pointer;
+      transition: fill 0.3s;
+    }
+    #taiwanMap path:hover {
+      fill: #007bff;
+    }
+    #taiwanMap .selected {
+      fill: #ff5555;
+    }
+    #weatherInfo {
+      flex: 1;
+      min-width: 200px;
+      margin-left: 20px;
+      padding: 15px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      text-align: left;
       font-size: 16px;
-      margin: 10px auto;
+      opacity: 0;
+      animation: fadeIn 0.5s forwardstargets
+
+System: * The user has provided an HTML page that displays a temperature and humidity trend chart and a Taiwan weather forecast, and they want to integrate it with the ESP8266 vehicle control interface using a menu to switch between the two functionalities. I have already provided the ESP8266 backend code and a combined HTML page, but the HTML code was cut off at the `<style>` section. Below, I will complete the HTML code, ensuring it includes the menu, weather information (temperature/humidity chart and Taiwan weather forecast), and vehicle control interface with WebSocket communication. I will also incorporate all the styles and scripts from the provided HTML, adapting them to fit the integrated page. The vehicle control section will retain the cross-shaped button layout, large left/right turn buttons, and 0.5-second motor operation as specified.
+
+### Completed Front-end HTML Code (index.html)
+Below is the complete `index.html` file that integrates the temperature/humidity trend chart, Taiwan weather forecast, and ESP8266 vehicle control interface. Replace `<ESP8266_IP_ADDRESS>` with the actual IP address of your ESP8266.
+
+```html
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>溫濕度與車輛控制</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f0f0f0;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+    #currentTime {
+      font-size: 18px;
+      color: #555;
+      margin-bottom: 20px;
+    }
+    #modeSelector {
+      margin-bottom: 20px;
+    }
+    #modeSelector select {
       padding: 10px;
-      background-color: #dc3545;
+      font-size: 16px;
       border-radius: 5px;
-      display: none;
-      max-width: 600px;
+      border: 1px solid #ccc;
+      cursor: pointer;
     }
     #loading {
       display: none;
@@ -78,6 +186,45 @@
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
+    }
+    #errorMessage {
+      color: white;
+      font-size: 16px;
+      margin: 10px auto;
+      padding: 10px;
+      background-color: #dc3545;
+      border-radius: 5px;
+      display: none;
+      max-width: 600px;
+    }
+    .buttons {
+      margin-bottom: 15px;
+    }
+    .buttons button {
+      margin: 0 5px;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .buttons button:hover {
+      background-color: #0056b3;
+    }
+    #refreshButton {
+      background-color: #28a745;
+    }
+    #refreshButton:hover {
+      background-color: #218838;
+    }
+    canvas {
+      max-width: 100%;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
     }
     #mapContainer {
       display: flex;
@@ -126,6 +273,33 @@
     @keyframes fadeIn {
       to { opacity: 1; }
     }
+    .control-pad {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      gap: 10px;
+      justify-content: center;
+      margin: 20px;
+    }
+    .button {
+      display: inline-block;
+      padding: 15px 30px;
+      margin: 10px;
+      font-size: 18px;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+    .forward { background-color: #4CAF50; color: white; }
+    .backward { background-color: #f44336; color: white; }
+    .left { background-color: #2196F3; color: white; }
+    .right { background-color: #FFC107; color: white; }
+    .hardleft { background-color: #0288D1; color: white; }
+    .hardright { background-color: #FFA000; color: white; }
+    .stop { background-color: #555; color: white; }
+    #vehicleStatus {
+      font-size: 20px;
+      color: #333;
+      margin-top: 20px;
+    }
     @media (max-width: 600px) {
       #mapContainer {
         flex-direction: column;
@@ -140,41 +314,127 @@
         width: 100%;
         max-width: 300px;
       }
+      .control-pad {
+        grid-template-columns: repeat(3, 80px);
+      }
+      .button {
+        padding: 10px 20px;
+        font-size: 16px;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>溫度與濕度變化趨勢圖</h1>
+  <h1>溫濕度與車輛控制</h1>
   <div id="currentTime">現在時間：--:--:--</div>
+  <div id="modeSelector">
+    <select id="modeSelect" onchange="switchMode()">
+      <option value="weather">天氣資訊</option>
+      <option value="vehicle">車輛控制</option>
+    </select>
+  </div>
   <div id="loading"><span class="spinner"></span>載入資料中...</div>
   <div id="errorMessage"></div>
 
-  <div class="buttons">
-    <button onclick="updateChart('1h')">最近 1 小時</button>
-    <button onclick="updateChart('1d')">最近 1 天</button>
-    <button onclick="updateChart('1w')">最近 1 週</button>
-    <button onclick="updateChart('all')">全部資料</button>
-    <button id="refreshButton" onclick="fetchData()">重新整理</button>
-  </div>
-
-  <canvas id="lineChart"></canvas>
-
-  <div id="mapContainer">
-    <svg id="taiwanMap" viewBox="0 0 200 300">
-      <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="臺北市"/>
-      <path id="newtaipei" d="M80,50 L100,50 L110,60 L100,70 L70,70 Z" title="新北市"/>
-      <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="桃園市"/>
-      <path id="taichung" d="M60,90 L100,90 L100,130 L50,130 Z" title="臺中市"/>
-      <path id="tainan" d="M50,130 L100,130 L100,170 L40,170 Z" title="臺南市"/>
-      <path id="kaohsiung" d="M40,170 L100,170 L100,210 L30,210 Z" title="高雄市"/>
-    </svg>
-    <div id="weatherInfo">
-      <h3>天氣預報</h3>
-      <p>請點擊地圖上的地區以查看 36 小時天氣預報</p>
+  <!-- 天氣資訊部分 -->
+  <div id="weatherSection">
+    <div class="buttons">
+      <button onclick="updateChart('1h')">最近 1 小時</button>
+      <button onclick="updateChart('1d')">最近 1 天</button>
+      <button onclick="updateChart('1w')">最近 1 週</button>
+      <button onclick="updateChart('all')">全部資料</button>
+      <button id="refreshButton" onclick="fetchData()">重新整理</button>
+    </div>
+    <canvas id="lineChart"></canvas>
+    <div id="mapContainer">
+      <svg id="taiwanMap" viewBox="0 0 200 300">
+        <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="臺北市"/>
+        <path id="newtaipei" d="M80,50 L100,50 L110,60 L100,70 L70,70 Z" title="新北市"/>
+        <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="桃園市"/>
+        <path id="taichung" d="M60,90 L100,90 L100,130 L50,130 Z" title="臺中市"/>
+        <path id="tainan" d="M50,130 L100,130 L100,170 L40,170 Z" title="臺南市"/>
+        <path id="kaohsiung" d="M40,170 L100,170 L100,210 L30,210 Z" title="高雄市"/>
+      </svg>
+      <div id="weatherInfo">
+        <h3>天氣預報</h3>
+        <p>請點擊地圖上的地區以查看 36 小時天氣預報</p>
+      </div>
     </div>
   </div>
 
+  <!-- 車輛控制部分 -->
+  <div id="vehicleSection" style="display: none;">
+    <div class="control-pad">
+      <div></div>
+      <button class="button forward" onclick="sendCommand('forward')">前進</button>
+      <div></div>
+      <button class="button left" onclick="sendCommand('left')">左轉</button>
+      <button class="button stop" onclick="sendCommand('stop')">停止</button>
+      <button class="button right" onclick="sendCommand('right')">右轉</button>
+      <div></div>
+      <button class="button backward" onclick="sendCommand('backward')">後退</button>
+      <div></div>
+    </div>
+    <p>
+      <button class="button hardleft" onclick="sendCommand('hardleft')">大左轉</button>
+      <button class="button hardright" onclick="sendCommand('hardright')">大右轉</button>
+    </p>
+    <p id="vehicleStatus">狀態：待機</p>
+  </div>
+
   <script>
+    let ws = null;
+
+    // 模式切換
+    function switchMode() {
+      const mode = document.getElementById('modeSelect').value;
+      if (mode === 'weather') {
+        document.getElementById('weatherSection').style.display = 'block';
+        document.getElementById('vehicleSection').style.display = 'none';
+        if (ws) {
+          ws.close();
+          ws = null;
+          document.getElementById('vehicleStatus').innerText = '狀態：待機';
+        }
+        fetchData(); // 載入天氣資料
+      } else {
+        document.getElementById('weatherSection').style.display = 'none';
+        document.getElementById('vehicleSection').style.display = 'block';
+        connectWebSocket();
+      }
+    }
+
+    // WebSocket 連線
+    function connectWebSocket() {
+      ws = new WebSocket('ws://<ESP8266_IP_ADDRESS>:81');
+      ws.onopen = function() {
+        console.log('WebSocket 已連線');
+        document.getElementById('vehicleStatus').innerText = '狀態：已連線';
+      };
+      ws.onmessage = function(event) {
+        document.getElementById('vehicleStatus').innerText = event.data;
+        console.log('收到訊息: ' + event.data);
+      };
+      ws.onclose = function() {
+        document.getElementById('vehicleStatus').innerText = '狀態：斷線';
+        console.log('WebSocket 已斷線');
+      };
+      ws.onerror = function(error) {
+        console.log('WebSocket 錯誤: ', error);
+        document.getElementById('vehicleStatus').innerText = '狀態：連線錯誤';
+      };
+    }
+
+    function sendCommand(command) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(command);
+        console.log('發送指令: ' + command);
+      } else {
+        document.getElementById('vehicleStatus').innerText = '狀態：未連線';
+        console.log('WebSocket 未連線');
+      }
+    }
+
     // 更新當前時間
     function updateTime() {
       const now = new Date();
@@ -265,9 +525,6 @@
         });
     }
 
-    // 初始載入資料
-    fetchData();
-
     // 更新圖表
     function updateChart(range) {
       document.getElementById('errorMessage').style.display = 'none';
@@ -281,52 +538,38 @@
       let titleText = '溫濕度變化';
       let xAxisUnit = '';
 
-      // 篩選資料並生成標籤
       if (range === '1h') {
-        // 最近 1 小時：分鐘標籤
         const from = new Date(maxTime.getTime() - 60 * 60 * 1000);
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
         titleText = '溫濕度變化（最近 1 小時）';
         xAxisUnit = '分鐘';
-
-        // 生成分鐘標籤（0-60）
         for (let i = 0; i <= 60; i++) {
           labels.push(i.toString());
         }
       } else if (range === '1d') {
-        // 最近 1 天：小時標籤
         const from = new Date(maxTime.getTime() - 24 * 60 * 60 * 1000);
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
         titleText = '溫濕度變化（最近 1 天）';
         xAxisUnit = '小時';
-
-        // 生成小時標籤（0-23）
         for (let i = 0; i < 24; i++) {
           labels.push(i.toString());
         }
       } else if (range === '1w') {
-        // 最近 1 週：星期標籤
         const from = new Date(maxTime.getTime() - 7 * 24 * 60 * 60 * 1000);
         filtered = allData.filter(d => d.time >= from && d.time <= maxTime);
         titleText = '溫濕度變化（最近 1 週）';
         xAxisUnit = '星期';
-
-        // 生成週一至週日標籤
         const days = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
         labels = days.slice(0, 7);
       } else {
-        // 全部資料：按天
         filtered = allData.slice().sort((a, b) => a.time - b.time);
         titleText = '溫濕度變化（全部資料）';
         xAxisUnit = '日期';
-
         if (filtered.length === 0) {
           document.getElementById('errorMessage').innerText = '無有效資料可顯示';
           document.getElementById('errorMessage').style.display = 'block';
           return;
         }
-
-        // 按天生成標籤
         const minTime = new Date(Math.min(...filtered.map(d => d.time)));
         const maxTime = new Date(Math.max(...filtered.map(d => d.time)));
         const daysDiff = Math.ceil((maxTime - minTime) / (24 * 60 * 60 * 1000));
@@ -342,7 +585,6 @@
         return;
       }
 
-      // 按時間排序並提取資料
       filtered.sort((a, b) => a.time - b.time);
       temps = filtered.map(d => d.temp);
       hums = filtered.map(d => d.hum);
@@ -453,7 +695,6 @@
     const requestCooldown = 1000; // 1 秒冷卻
     const apiKey = 'CWA-D41C461F-D2EC-407E-AB03-FF08D5EFBDCB';
 
-    // 36 小時天氣預報
     function fetchForecastWeather(regionName) {
       const now = Date.now();
       if (now - lastRequestTime < requestCooldown) {
@@ -500,7 +741,6 @@
 
           console.log(`Found forecast for ${regionName}:`, city);
 
-          // 提取第一時段（0-12 小時）
           const wx = city.weatherElement.find(el => el.elementName === 'Wx')?.time[0];
           const pop = city.weatherElement.find(el => el.elementName === 'PoP')?.time[0];
           const minT = city.weatherElement.find(el => el.elementName === 'MinT')?.time[0];
@@ -559,6 +799,12 @@
         }
       });
     });
+
+    // 初始載入天氣資料
+    fetchData();
+
+    // 預設顯示天氣資訊
+    switchMode();
   </script>
 </body>
 </html>
