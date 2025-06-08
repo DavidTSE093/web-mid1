@@ -165,7 +165,7 @@
   </style>
 </head>
 <body>
-  <h1>溫濕濕度與車輛控制</h1>
+  <h1>溫濕度與車輛控制</h1>
   <div id="currentTime">現在時間：--:--:--</div>
   <div id="modeSelector">
     <select id="modeSelect" onchange="switchMode()">
@@ -173,7 +173,7 @@
       <option value="vehicle">車輛控制</option>
     </select>
   </div>
-  <div id="loading"><span class="spinner"></span> 載入資料中...</div>
+  <div id="loading"><span class="spinner"></span>載入資料中...</div>
   <div id="errorMessage"></div>
 
   <!-- 天氣資訊部分 -->
@@ -188,9 +188,9 @@
     <canvas id="lineChart"></canvas>
     <div id="mapContainer">
       <svg id="taiwanMap" viewBox="0 0 200 300">
-        <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="測試"/>
+        <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="臺北市"/>
         <path id="newtaipei" d="M80,50 L100,50 L110,60 L100,70 L70,70 Z" title="新北市"/>
-        <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="測試"/>
+        <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="桃園市"/>
         <path id="taichung" d="M60,90 L100,90 L100,130 L50,130 Z" title="臺中市"/>
         <path id="tainan" d="M50,130 L100,130 L100,170 L40,170 Z" title="臺南市"/>
         <path id="kaohsiung" d="M40,170 L100,170 L100,210 L30,210 Z" title="高雄市"/>
@@ -250,7 +250,7 @@
         const date = new Date(str);
         return isNaN(date.getTime()) ? null : date;
       } catch (e) {
-        console.warn('時間解析失敗:', str, e);
+        console.warn('時間解析失敗:', str);
         return null;
       }
     }
@@ -279,20 +279,16 @@
       fetch(url)
         .then(res => res.text())
         .then(text => {
-          console.log('Raw JSON:', text.substring(0, 500) + '...');
           const json = JSON.parse(text.substring(47).slice(0, -2));
-          console.log('Parsed rows:', json.table.rows);
           const rows = json.table.rows.slice(1);
 
           allData = rows.map((row, index) => {
             const time = parseTime(row.c[0]?.v);
             const temp = row.c[1]?.v != null ? parseFloat(row.c[1].v) : null;
             const hum = row.c[2]?.v != null ? parseFloat(row.c[2].v) : null;
-            console.log(`Row ${index + 2}:`, { time: row.c[0]?.v, parsedTime: time, temp, hum });
             return { time, temp, hum };
           }).filter(d => d.time && !isNaN(d.time.getTime()));
 
-          console.log('Filtered allData:', allData);
           document.getElementById('loading').style.display = 'none';
 
           if (allData.length === 0) {
@@ -375,8 +371,6 @@
       temps = filtered.map(d => d.temp);
       hums = filtered.map(d => d.hum);
       times = filtered.map(d => d.time);
-
-      console.log('Chart data:', { labels, temps, hums, times });
 
       if (chart) chart.destroy();
       const ctx = document.getElementById('lineChart').getContext('2d');
@@ -494,18 +488,13 @@
 
       document.getElementById('loading').style.display = 'block';
       const forecastUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=${apiKey}`;
-      console.log(`Sending forecast request to: ${forecastUrl}`);
-
       fetch(forecastUrl)
         .then(res => {
-          console.log(`Response status for forecast: ${res.status}`);
           if (!res.ok) throw new Error(`HTTP 錯誤: ${res.status}`);
           return res.json();
         })
         .then(data => {
-          console.log(`Forecast API response:`, data);
           document.getElementById('loading').style.display = 'none';
-
           if (!data || !data.success || !data.records?.location) {
             document.getElementById('weatherInfo').innerHTML = `
               <h3>${regionName}</h3>
@@ -517,15 +506,12 @@
           const locations = data.records.location;
           const city = locations.find(loc => loc.locationName === regionName);
           if (!city) {
-            console.log(`No forecast data for ${regionName}`);
             document.getElementById('weatherInfo').innerHTML = `
               <h3>${regionName}</h3>
               <p>⚠️ 無預報資料：找不到 ${regionName}</p>
             `;
             return;
           }
-
-          console.log(`Found forecast for ${regionName}:`, city);
 
           const wx = city.weatherElement.find(el => el.elementName === 'Wx')?.time[0];
           const pop = city.weatherElement.find(el => el.elementName === 'PoP')?.time[0];
@@ -556,7 +542,6 @@
           `;
         })
         .catch(error => {
-          console.error(`Forecast error for ${regionName}:`, error);
           document.getElementById('loading').style.display = 'none';
           document.getElementById('weatherInfo').innerHTML = `
             <h3>${regionName}</h3>
@@ -575,7 +560,6 @@
         const regionId = path.id;
         const region = cityMap[regionId];
         if (region) {
-          console.log(`Fetching forecast for ${region.name}`);
           fetchForecastWeather(region.name);
         } else {
           document.getElementById('weatherInfo').innerHTML = `
