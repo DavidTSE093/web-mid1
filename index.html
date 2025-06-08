@@ -136,31 +136,12 @@
     @keyframes fadeIn {
       to { opacity: 1; }
     }
-    .control-pad {
-      display: grid;
-      grid-template-columns: repeat(3, 100px);
-      gap: 10px;
-      justify-content: center;
-      margin: 20px;
-    }
-    .button {
-      display: inline-block;
-      padding: 15px 30px;
-      margin: 10px;
-      font-size: 18px;
-      cursor: pointer;
-      border-radius: 5px;
-    }
-    .forward { background-color: #4CAF50; color: white; }
-    .backward { background-color: #f44336; color: white; }
-    .left { background-color: #2196F3; color: white; }
-    .right { background-color: #FFC107; color: white; }
-    .hardleft { background-color: #0288D1; color: white; }
-    .hardright { background-color: #FFA000; color: white; }
-    .stop { background-color: #555; color: white; }
-    #vehicleStatus {
-      font-size: 20px;
-      color: #333;
+    #vehicleSection iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       margin-top: 20px;
     }
     @media (max-width: 600px) {
@@ -177,18 +158,14 @@
         width: 100%;
         max-width: 300px;
       }
-      .control-pad {
-        grid-template-columns: repeat(3, 80px);
-      }
-      .button {
-        padding: 10px 20px;
-        font-size: 16px;
+      #vehicleSection iframe {
+        height: 400px;
       }
     }
   </style>
 </head>
 <body>
-  <h1>溫濕度與車輛控制</h1>
+  <h1>溫濕濕度與車輛控制</h1>
   <div id="currentTime">現在時間：--:--:--</div>
   <div id="modeSelector">
     <select id="modeSelect" onchange="switchMode()">
@@ -196,7 +173,7 @@
       <option value="vehicle">車輛控制</option>
     </select>
   </div>
-  <div id="loading"><span class="spinner"></span>載入資料中...</div>
+  <div id="loading"><span class="spinner"></span> 載入資料中...</div>
   <div id="errorMessage"></div>
 
   <!-- 天氣資訊部分 -->
@@ -211,9 +188,9 @@
     <canvas id="lineChart"></canvas>
     <div id="mapContainer">
       <svg id="taiwanMap" viewBox="0 0 200 300">
-        <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="臺北市"/>
+        <path id="taipei" d="M90,20 C100,20 110,30 110,40 L100,50 L80,50 Z" title="測試"/>
         <path id="newtaipei" d="M80,50 L100,50 L110,60 L100,70 L70,70 Z" title="新北市"/>
-        <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="桃園市"/>
+        <path id="taoyuan" d="M70,70 L100,70 L100,90 L60,90 Z" title="測試"/>
         <path id="taichung" d="M60,90 L100,90 L100,130 L50,130 Z" title="臺中市"/>
         <path id="tainan" d="M50,130 L100,130 L100,170 L40,170 Z" title="臺南市"/>
         <path id="kaohsiung" d="M40,170 L100,170 L100,210 L30,210 Z" title="高雄市"/>
@@ -227,74 +204,20 @@
 
   <!-- 車輛控制部分 -->
   <div id="vehicleSection" style="display: none;">
-    <div class="control-pad">
-      <div></div>
-      <button class="button forward" onclick="sendCommand('forward')">前進</button>
-      <div></div>
-      <button class="button left" onclick="sendCommand('left')">左轉</button>
-      <button class="button stop" onclick="sendCommand('stop')">停止</button>
-      <button class="button right" onclick="sendCommand('right')">右轉</button>
-      <div></div>
-      <button class="button backward" onclick="sendCommand('backward')">後退</button>
-      <div></div>
-    </div>
-    <p>
-      <button class="button hardleft" onclick="sendCommand('hardleft')">大左轉</button>
-      <button class="button hardright" onclick="sendCommand('hardright')">大右轉</button>
-    </p>
-    <p id="vehicleStatus">狀態：待機</p>
+    <iframe id="vehicleControlFrame" src="http://10.153.131.95/"></iframe>
   </div>
 
   <script>
-    let ws = null;
-
     // 模式切換
     function switchMode() {
       const mode = document.getElementById('modeSelect').value;
       if (mode === 'weather') {
         document.getElementById('weatherSection').style.display = 'block';
         document.getElementById('vehicleSection').style.display = 'none';
-        if (ws) {
-          ws.close();
-          ws = null;
-          document.getElementById('vehicleStatus').innerText = '狀態：待機';
-        }
         fetchData(); // 載入天氣資料
       } else {
         document.getElementById('weatherSection').style.display = 'none';
         document.getElementById('vehicleSection').style.display = 'block';
-        connectWebSocket();
-      }
-    }
-
-    // WebSocket 連線
-    function connectWebSocket() {
-      ws = new WebSocket('ws://10.153.131.95:81'); // 更新為 ESP8266 IP
-      ws.onopen = function() {
-        console.log('WebSocket 已連線');
-        document.getElementById('vehicleStatus').innerText = '狀態：已連線';
-      };
-      ws.onmessage = function(event) {
-        document.getElementById('vehicleStatus').innerText = event.data;
-        console.log('收到訊息: ' + event.data);
-      };
-      ws.onclose = function() {
-        document.getElementById('vehicleStatus').innerText = '狀態：斷線';
-        console.log('WebSocket 已斷線');
-      };
-      ws.onerror = function(error) {
-        console.log('WebSocket 錯誤: ', error);
-        document.getElementById('vehicleStatus').innerText = '狀態：連線錯誤';
-      };
-    }
-
-    function sendCommand(command) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(command);
-        console.log('發送指令: ' + command);
-      } else {
-        document.getElementById('vehicleStatus').innerText = '狀態：未連線';
-        console.log('WebSocket 未連線');
       }
     }
 
