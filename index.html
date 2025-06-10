@@ -204,7 +204,7 @@
 
   <!-- 車輛控制部分 -->
   <div id="vehicleSection" style="display: none;">
-    <iframe id="vehicleControlFrame" src="http://10.153.131.95/"></iframe>
+    <iframe id="vehicleControlFrame" src="http://10.255.7.95/"></iframe>
   </div>
 
   <script>
@@ -355,7 +355,9 @@
         const minTime = new Date(Math.min(...filtered.map(d => d.time)));
         const maxTime = new Date(Math.max(...filtered.map(d => d.time)));
         const daysDiff = Math.ceil((maxTime - minTime) / (24 * 60 * 60 * 1000));
-        for (let i = 0; i <= daysDiff; i++) {
+        for (let i = 0; i <= daysDiff;
+
+ i++) {
           const day = new Date(minTime.getTime() + i * 24 * 60 * 60 * 1000);
           labels.push(`${day.getMonth() + 1}/${day.getDate()}`);
         }
@@ -411,7 +413,9 @@
             legend: { position: 'top' },
             title: {
               display: true,
-              text: titleText,
+              text: title
+
+Text,
               font: { size: 18 }
             },
             tooltip: {
