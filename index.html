@@ -204,7 +204,7 @@
 
   <!-- 車輛控制部分 -->
   <div id="vehicleSection" style="display: none;">
-    <iframe id="vehicleControlFrame" src="http://10.255.7.95/"></iframe>
+    <iframe id="vehicleControlFrame" src="http://10.85.164.95/"></iframe>
   </div>
 
   <script>
@@ -355,9 +355,7 @@
         const minTime = new Date(Math.min(...filtered.map(d => d.time)));
         const maxTime = new Date(Math.max(...filtered.map(d => d.time)));
         const daysDiff = Math.ceil((maxTime - minTime) / (24 * 60 * 60 * 1000));
-        for (let i = 0; i <= daysDiff;
-
- i++) {
+        for (let i = 0; i <= daysDiff; i++) {
           const day = new Date(minTime.getTime() + i * 24 * 60 * 60 * 1000);
           labels.push(`${day.getMonth() + 1}/${day.getDate()}`);
         }
@@ -413,9 +411,7 @@
             legend: { position: 'top' },
             title: {
               display: true,
-              text: title
-
-Text,
+              text: titleText,
               font: { size: 18 }
             },
             tooltip: {
@@ -523,7 +519,7 @@ Text,
           const maxT = city.weatherElement.find(el => el.elementName === 'MaxT')?.time[0];
 
           if (!wx || !pop || !minT || !maxT) {
-            document.getElementById('weatherInfo').innerHTML = `
+            document.getElementById('weatherinfo').innerHTML = `
               <h3>${regionName}</h3>
               <p>⚠️ 無完整預報資料</p>
             `;
