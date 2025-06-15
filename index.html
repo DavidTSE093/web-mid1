@@ -10,6 +10,7 @@
       padding: 20px;
       background-color: #f0f0f0;
       text-align: center;
+      position: relative; /* 為狀態方塊定位 */
     }
     h1 {
       margin-bottom: 10px;
@@ -142,6 +143,17 @@
     @keyframes fadeIn {
       to { opacity: 1; }
     }
+    /* 狀態方塊樣式 */
+    #statusSquare {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 30px;
+      height: 30px;
+      border: 2px solid #333;
+      border-radius: 5px;
+      background-color: #ffc107; /* 預設黃色 */
+    }
     @media (max-width: 600px) {
       #mapContainer {
         flex-direction: column;
@@ -156,10 +168,18 @@
         width: 100%;
         max-width: 300px;
       }
+      #statusSquare {
+        top: 10px;
+        left: 10px;
+        width: 25px;
+        height: 25px;
+      }
     }
   </style>
 </head>
 <body>
+  <!-- 狀態方塊 -->
+  <div id="statusSquare"></div>
   <h1>溫濕度與車輛控制</h1>
   <div id="currentTime">現在時間：--:--:--</div>
   <div id="modeSelector">
@@ -195,6 +215,39 @@
   </div>
 
   <script>
+    // ESP8266 API URL
+    const espApiUrl = "http://YOUR_ESP8266_IP/"; // 替換為ESP8266的IP地址，例如 http://192.168.1.100/
+
+    // 更新狀態方塊
+    function updateStatusSquare(isBlocked) {
+      const statusSquare = document.getElementById('statusSquare');
+      if (isBlocked === null) {
+        statusSquare.style.backgroundColor = '#ffc107'; // 黃色，未接收數據
+      } else if (isBlocked) {
+        statusSquare.style.backgroundColor = '#dc3545'; // 紅色，有遮蔽
+      } else {
+        statusSquare.style.backgroundColor = '#28a745'; // 綠色，無遮蔽
+      }
+    }
+
+    // 從ESP8266獲取遮蔽狀態
+    function fetchESPData() {
+      fetch(espApiUrl)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('ESP8266未回應');
+          }
+          return response.json();
+        })
+        .then(data => {
+          updateStatusSquare(data.isBlocked); // 更新方塊顏色
+        })
+        .catch(error => {
+          console.error('ESP8266數據獲取失敗:', error);
+          updateStatusSquare(null); // 黃色，未接收數據
+        });
+    }
+
     // 開啟車輛控制網頁
     function openVehicleControl() {
       window.open('http://10.85.164.95/', '_blank');
@@ -284,9 +337,12 @@
           document.getElementById('errorMessage').style.display = 'block';
           console.error('資料讀取錯誤:', error);
         });
+
+      // 獲取ESP8266遮蔽狀態
+      fetchESPData();
     }
 
-    // 更新圖表
+    // 更新圖表（保持原邏輯不變）
     function updateChart(range) {
       document.getElementById('errorMessage').style.display = 'none';
 
@@ -549,8 +605,9 @@
       });
     });
 
-    // 初始載入天氣資料
+    // 初始載入數據並每5秒更新遮蔽狀態
     fetchData();
+    setInterval(fetchESPData, 5000);
   </script>
 </body>
 </html>
